@@ -38,9 +38,10 @@ ui <- dashboardPage(
                    )),
   dashboardBody(
     tabItems(
+      #KM Plot
       tabItem(tabName = "KM",
               fluidRow(
-                
+                #Plot Preview
                 box(
                   title = "KM Plot", width = 7, solidHeader = T, status = "success",
                   fluidRow(
@@ -56,13 +57,12 @@ ui <- dashboardPage(
                            numericInput("pht","Height (inch)",value = 4,width = "80%")),
                     column(12,
                            uiOutput("plotui"),
-                           #uiOutput("plotui2"),
-                           #uiOutput("plotui1")
 
                     )
                   )
                   
                 ),
+                #Plot Customization
                 tabBox(width = 5,
                        tabPanel("Basic",
                                 fluidRow(
@@ -130,24 +130,16 @@ ui <- dashboardPage(
                                            actionButton("down_btn",icon("arrow-down")),
                                            actionButton("right_btn",icon("arrow-right")),
                                            br(),
-                                           br(),
-                                           # numericInput("legendx","x coordinate(0-1)",value = 0.8),
-                                           # numericInput("legendy","y coordinate(0-1)",value = 0.85),
-                                           #actionButton("lexy","Update")
-                                           
-                                         )
+                                           br())
                                   ),
                                   column(6,
                                         h5(tags$b("Font size of the text in legend")),
                                         actionButton("size_up",icon("plus"),width = "18%"),
                                         actionButton("size_down",icon("minus"),width = "18%"),
                                         numericInput("fontsize",NULL,value = 8.5,width = "37%")
-                                           
-
                                   )
-                                  
-                                  
-                                )),
+
+                       )),
                        tabPanel("Summary Table",
                                 fluidRow(
                                   column(6,
@@ -174,9 +166,8 @@ ui <- dashboardPage(
                                          actionButton("sizes_up",icon("plus"),width = "18%"),
                                          actionButton("sizes_down",icon("minus"),width = "18%"),
                                          numericInput("sizes",NULL,value = 6,width = "37%")),
-                                  
-                                )),
-                       
+                                  )
+                       ),
                        tabPanel("Survival Rates",
                                 fluidRow(
                                   column(12,
@@ -228,9 +219,7 @@ ui <- dashboardPage(
 
                                   column(12,
                                          br(),
-                                         #checkboxInput("lty",tags$b("Check for different linetype"),value = F),
                                          checkboxInput("cpb",tags$b("Check for plot border"),value = T),
-                                         #checkboxInput("cb",tags$b("Check for legend border"),value = F),
                                          numericInput("brerd","The maximum break of x-axis",value = NULL)),
                                   column(12,
                                          checkboxInput("order", tags$b("Need order adjustment for the label display"))
@@ -238,15 +227,18 @@ ui <- dashboardPage(
                                   column(12,
                                          uiOutput("level")
                                   )
-                                ))
+                                )
+                      )
                 )
                 
               )
       ),
+      #Forest Plot
       tabItem(tabName = "FR",
               tabBox(title = "",
                      width = 5,
                      id = "tabset1",
+                     #Plot Customization
                      tabPanel("Basic",
                               fluidRow(
                                 column(6,
@@ -272,22 +264,14 @@ ui <- dashboardPage(
 
                                 column(6,
                                        selectInput("tie","Select handling method for tied events", choices = c("efron" = "efron",   "exact('discret' in SAS)" = "exact", "breslow" = "breslow"), selected = "efron")),
-                                # column(12,
-                                #        checkboxInput("ccfile",tags$b("Have Configuration File")),
-                                #        uiOutput("ccupload")
-                                #        ),
                                 column(12,
-                                       uiOutput("combway1"),
+                                       checkboxInput("icomb",tags$b("Internal combination: Need combination within a variable")),
                                        uiOutput("icomb"),
                                        uiOutput("icombinfo"),
                                 ),
-                                # column(4,
-                                #        uiOutput("combway2"),
-                                #        uiOutput("ecomb"),
-                                #        uiOutput("ecombinfo")
-                                #        ),
                                 
-                              )),
+                              )
+                     ),
                      tabPanel("Selection",
                               fluidRow(
                                 column(6,
@@ -358,6 +342,7 @@ ui <- dashboardPage(
 
                               )),
               ),
+              #Table Preview
               tabBox(
                 title = "", width = 7,  
                 id = "tabset2",
@@ -371,6 +356,7 @@ ui <- dashboardPage(
                          )
                          
                 ),
+                #Plot Preview
                 tabPanel("Forest Plot",
                          fluidRow(
                            tags$style("
@@ -381,14 +367,6 @@ ui <- dashboardPage(
                                   max-height: 35cm;
                                   }
                                   "),
-                           # column(12,
-                           #        fileInput("FRtable","Upload table which is ready to plot"),
-                           #        fileInput("cinfile","Upload configuration file to plot")
-                           # ),
-                           # column(12,
-                           #        checkboxInput("pool",tags$b("Need pooled patient's information"),value = T)),
-                           # column(12,
-                           #        checkboxInput("cin",tags$b("Show p-value for interaction"),value = T)),
                            column(6,
                                   fileInput("FRtable","Upload table which is ready to plot"),
                            ),
@@ -403,17 +381,15 @@ ui <- dashboardPage(
                            ),
                            column(12,
                                   plotOutput("FRPlot",height = "600px")
-                           )
-                           
-                           # column(12,plotOutput("FRPlot1"))
-                         )
+                           ))
                 ),
                 tabPanel("Summary Table",
                          fluidRow(
                            column(12,
                                   downloadButton("dftable","Download Excel"),
                                   uiOutput("savart"),
-                                    reactableOutput("dft")     )))
+                                    reactableOutput("dft")     ))
+                )
                 
               )
               
@@ -575,6 +551,18 @@ server <- function(input,output){
     sy(sy()-0.05)
     
   })
+  
+  laname <- reactiveVal()
+  observeEvent(data_final(),{data <- data_final()
+  name <- levels(data$TRTP)
+  laname(name)})
+  observeEvent(input$labn,
+               {
+                 data <- data_final()
+                 name <- sapply(levels(data$TRTP),function(x) input[[paste("labname_",x)]])
+                 laname(name)
+                 
+               })
 
 #-------------KMPLOT_UI------------
   
@@ -752,29 +740,13 @@ server <- function(input,output){
       return(NULL)
     file <- input$file1
     val = unlist(levels(data()$TRTP))
-    # map(val,~numericInput(paste("rank_",.),label = paste0("The position to place ",.),value = NULL))
-    # map(val,~actionButton(paste("rank_",.),label = .,icon("arrow-up")))
     rank_list(
       text = "Drag the items in any desired order",
       labels = val,
       input_id = "rank_list")
   })
   
-  # output$lela <- renderUI({
-  #   if(is.null(data())){
-  #     return(NULL)
-  #   }     
-  #   else{
-  #     data <- data_final()
-  #     val = unlist(unique(data$TRTP))
-  #     inputList <- list(
-  #       map(levels(data$TRTP),~textInput(paste("labname_",.),label = paste0("Label for ",.),value = .)),
-  #       actionButton("labn","Refresh")
-  #     )
-  #     do.call(tagList,inputList)
-  #   }  
-  # })
-  
+  #Adjust label,color,linetype
   output$color <- renderUI({
     if(is.null(input$file1))     
       return(NULL)
@@ -816,27 +788,44 @@ server <- function(input,output){
     })
   })
   
-
-  # 
-  # output$linetype <- renderUI({
-  #   if(is.null(input$file1))
-  #     return(NULL)
-  #   data <- data_final()
-  #   default_cols = c("solid","dashed","dotted","dotdash","longdash","twodash")
-  #   val = levels(data$TRTP)
-  #   map(val,function(level){
-  #     level_index <- which(val == level)
-  #     default_col = default_cols[level_index]
-  #     selectInput(paste0("linetype_",level),label = "Linetype",
-  #                 choices = list("solid" = "solid",
-  #                                "dashed" = "dashed",
-  #                                "dotted" = "dotted",
-  #                                "dotdash" = "dotdash",
-  #                                "longdash" = "longdash",
-  #                                "twodash" = "twodash")
-  #                 ,selected = default_col)
-  #   })
-  # })
+  output$template <- downloadHandler(
+    filename = "template.xlsx",
+    content = function(file){
+      file.copy("template.xlsx",file)
+    }
+  )
+  
+  output$quantile <- renderUI({
+    if(!is.na(input$numq)&&input$numq>0){     
+      data <- data_final()
+      val = unlist(unique(data$TRTP))
+      map(1:input$numq,~numericInput(paste("q_",.x),paste("Enter the time point ",.x),value = 0))
+    }else{
+      return(NULL)
+    }
+    
+  })
+  
+  output$deci <- renderUI({
+    if(!is.na(input$numq)&&input$numq>0){
+      numericInput("deci","The number of decimal places:",value = 1)
+    }else{
+      return(NULL)
+    }
+    
+  })
+  
+  output$dtm <- renderUI({
+    if(input$transf == T){
+      checkboxInput("dtm","Transform from day to month")
+    }
+  })
+  
+  output$mtd <- renderUI({
+    if(input$transf == T){
+      checkboxInput("mtd","Transform from month to day")
+    }
+  })
 
 #------Read_Dataset---------------------  
   data <- reactive({
@@ -847,7 +836,6 @@ server <- function(input,output){
         
         data <- read_sas(file$datapath)
         req(input$censorsas)
-        # data$TRTP <- factor(data$TRTP)
         data = subset(data,PARAM == input$param)
         data["TRTP"] = data[input$groupsas]
         if(!is.null(input$censorsas)){
@@ -908,7 +896,6 @@ server <- function(input,output){
 
 #----Adjust the order------------
   data_final <- reactive({
-    print(2)
     if(input$order == T){
       data <- data()
       data$TRTP = factor(data$TRTP,levels = input$rank_list)
@@ -929,58 +916,15 @@ server <- function(input,output){
     label = data %>% map_chr(attr_getter("label"))
   })
   
+#----model----  
   survfit <- reactive({
-    
     data = data_final()
     fit = survfit2(Surv(AVAL, status) ~ TRTP, data = data)  
-    
     fit
   })
   
   
-  laname <- reactiveVal()
-  observeEvent(data_final(),{data <- data_final()
-                           name <- levels(data$TRTP)
-                           laname(name)})
-  observeEvent(input$labn,
-               {
-                   data <- data_final()
-                   name <- sapply(levels(data$TRTP),function(x) input[[paste("labname_",x)]])
-                   laname(name)
-
-               })
-  
-
-  
-  output$template <- downloadHandler(
-    filename = "template.xlsx",
-    content = function(file){
-      file.copy("template.xlsx",file)
-    }
-  )
-  
-  output$quantile <- renderUI({
-    if(!is.na(input$numq)&&input$numq>0){     
-      data <- data_final()
-      val = unlist(unique(data$TRTP))
-      map(1:input$numq,~numericInput(paste("q_",.x),paste("Enter the time point ",.x),value = 0))
-    }else{
-      return(NULL)
-    }
-    
-  })
-  
-  output$deci <- renderUI({
-    if(!is.na(input$numq)&&input$numq>0){
-      numericInput("deci","The number of decimal places:",value = 1)
-    }else{
-      return(NULL)
-    }
-    
-  })
-  
- 
-  
+#----store the color value
   valcolors <- reactive({
     data <- data_final()
     val = unlist(unique(data$TRTP))
@@ -990,7 +934,7 @@ server <- function(input,output){
     color
   })
   
-
+#-----store the linetype value
   vallinetype <- reactive({
     data <- data_final()
     val = unlist(unique(data$TRTP))
@@ -1001,44 +945,16 @@ server <- function(input,output){
   })
   
 
-  # output$plot2 <- renderPlotly({
-  #   kmplot()
-  # }
-  # )
-  
-  # output$plotui2 <- renderUI({plotlyOutput("plot2",width = input$pwd*96,height = input$pht*96)})
-  
-  # 
-  # output$plot1 <- renderImage({
-  #   width = input$pwd
-  #   height = input$pht
-  #   p <- kmplot()
-  #   outfile <- tempfile(fileext='.png')
-  #   png(outfile, width=width, height=height,units = "in",res = 300)
-  #   ggsave(outfile,p)
-  #   
-  #   # Return a list containing the filename
-  #   list(src = outfile,
-  #        alt = "This is alternate text")
-  # }, deleteFile = TRUE)
-  # 
-  # output$plotui1 <- renderUI({imageOutput("plot1",click = clickOpts(id="plot_click"))})
-  # 
   output$plot <- renderPlot({kmplot()},res = 120)
-  output$plotui <- renderUI({plotOutput("plot",width = input$pwd*120,height = input$pht*120,click = clickOpts(id="plot_click"))})
-  # observeEvent(input$lexy,
-  #              {output$plot <- renderPlot({kmplot()+theme(legend.position = c(isolate(input$legendx),isolate(input$legendy)))
-  #              },res = 120)
-  #              })
+  output$plotui <- renderUI({plotOutput("plot",width = input$pwd*120,height = input$pht*120)})
 
   
-  
+#----Draw the KM plot---------  
   kmplot <- reactive({
     req(input$file1)
     if(length(valcolors()) == 0)     
       return(NULL)
     data <- data_final()
-    print(input$plot_click)
     fit = survfit()
     s=summary(fit)
     res = data.frame(cbind(fit$time,fit$surv,fit$n.censor))
@@ -1068,7 +984,6 @@ server <- function(input,output){
         title = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-     #   axis.line = element_line(colour = "black",linewidth = 1),
         axis.title.x = element_text(size = input$sizey,family="serif"),
         axis.title.y = element_blank(),
         axis.ticks.length = unit(tickLen(),"cm"),
@@ -1076,15 +991,14 @@ server <- function(input,output){
         axis.text.y = element_text(size = input$sizen,family="serif")) +
       guides(fill = guide_legend(byrow = T)) +
       labs(
-        # title = paste(title(),collapse = "\n"),
-        # y = paste(ylab(),collapse = "\n"),
         x = paste(xlab(),collapse = "\n")) +
       annotation_custom(grob=textGrob(label = paste(ylab(),collapse = "\n"),
                                       rot = 90,
                                       gp = gpar(fontsize = input$sizey, fontfamily = "serif"),
                                       x=-35,default.units = "pt")) +
       coord_cartesian(xlim = c(0,input$brerd),clip = "off") 
-    
+
+    ##-----draw censor mark    
     groupsize=diff(c(start,length(fit$surv)+1))
     
     df_line = data.frame(x=fit$time,y=fit$surv,censor=fit$n.censor,
@@ -1093,8 +1007,7 @@ server <- function(input,output){
     p <- p+geom_linerange(data = df_line,aes(x=x, ymin=y, ymax=y+censorSize()*(censor!=0)),
                           colour=df_line$color,linewidth=censort())
     
-   
-
+   ##------plot border
     if(input$cpb == T){
       p <- p+theme(panel.border = element_rect(color = "black",fill = NA))
     }
@@ -1103,7 +1016,7 @@ server <- function(input,output){
     
 
   
-    
+    ##-----draw survival rates
     if(input$q_a_a >0 && !is.na(input$numq) && input$numq>0 ){
       for(i in 1:input$numq){
         if(is.na(input[[paste("q_",i)]]) == F){
@@ -1118,26 +1031,22 @@ server <- function(input,output){
               n = 1
             }
             for (j in levels(data$TRTP)) {
-              
-              
               dot = paste(round(surv_summary$surv[m],input$deci+2)*100,"%")
-
               p <- p + annotate("text",x = input[[paste("q_",i)]]+0.4,y=n,label=dot,size = 9/.pt,color=valcolors()[j],hjust=0,vjust=1)
               m = m+1
               n = n-0.05
             }
           }
           else{
-            
             p <- p+annotate("text", x = 0, y = 0.5, label = paste0("Error: Please enter a number between 1 and ",round(max(data$AVAL),0)),color="red",hjust=0,size=9)
           }
-          
         }
         else{p}
       }
     }
     else{p}
     
+    ##-----draw summary table
     if(is.null(input$file2) == F){
       file <- input$file2
       options(scipen = 999)
@@ -1163,6 +1072,7 @@ server <- function(input,output){
       p
     }
     
+    ##-----draw legend--------
     if(input$cls == T){
         m = input$brerd-legendx()
         n = legendy()
@@ -1187,8 +1097,8 @@ server <- function(input,output){
       p
     }
     
+    ##------draw risktable
     if(input$rtb == T){
-      # risk table  
       RiskSetCount <- function(timeindex, survivaltime) {
         atrisk <- NULL
         for (t in timeindex)
@@ -1238,12 +1148,7 @@ server <- function(input,output){
       
     }else{p}
     
-    #  p <- ggsurvfit_build(p,combine_plots = T)
     p
-    #  p <- ggsurvfit_build(p,combine_plots = T)
-    p
-    
-    
   })
   
   output$kmppt <- downloadHandler(
@@ -1291,26 +1196,14 @@ server <- function(input,output){
     
   )
   
-  output$dtm <- renderUI({
-    if(input$transf == T){
-      checkboxInput("dtm","Transform from day to month")
-    }
-  })
-  
-  output$mtd <- renderUI({
-    if(input$transf == T){
-      checkboxInput("mtd","Transform from month to day")
-    }
-  })
+
 
 ##==============Forest plot=========================  
   
+  ##----read datasets-----
   FRdfsl <- reactive({
     file <- input$FRfile
     data <- read_sas(file$datapath)
-    # if(is.null(input$pop)==F){
-    #   
-    # }
     data
   })
   
@@ -1320,6 +1213,7 @@ server <- function(input,output){
     data
   })
   
+  ##updated UI
   output$adsl <- renderUI({
     if(input$adsl == F)
       return(NULL)
@@ -1345,19 +1239,10 @@ server <- function(input,output){
     fileInput("cinfile","Upload the configuration file" )
   })  
   
-  output$combway1 <- renderUI({
-    # if(input$comb == F)
-    #   return(NULL)
-    checkboxInput("icomb",tags$b("Internal combination: Need combination within a variable"))
-  })
-  
-  
+
   
   output$icomb <- renderUI({
     req(input$FRfile0)
-    # if(input$comb == F)
-    #   return(NULL)
-    # else{
     if(length(input$icomb) == 0)
       return(NULL)
     else if(input$icomb == F)
@@ -1369,7 +1254,6 @@ server <- function(input,output){
       numericInput("inumg","Number of groups",value = NULL)
     )
     do.call(tagList,inputList)
-    # }
     
   })
   
@@ -1814,20 +1698,6 @@ server <- function(input,output){
 
     data <- as.data.frame(data)
     data
-    # c <- c(paste(rep(" ",40),collapse = " "))
-    # 
-    # 
-    # mtg <- c()
-    # mrg <- c()
-    # mtlci <- c(med_surv$lower[2])
-    # mtuci <- c(med_surv$upper[2])
-    # mrlci <- c(med_surv$lower[1])
-    # mruci <- c(med_surv$upper[1])
-    # hr <- c(round(exp(coef(coxph(Surv(AVAL,status) ~ TRTP,data = info,ties = input$tie))),2))
-    # ciu <- c(round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP,data = info,ties = input$tie)))[,2],3))
-    # cil <- c(round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP,data = info,ties = input$tie)))[,1],3))
-    # p_v <- c(ifelse(survdiff(Surv(AVAL,status) ~ TRTP, data = info)$pvalue < 0.0001,"<0.0001",format(round(survdiff(Surv(AVAL,status) ~ TRTP, data = info)$pvalue,4),nsmall = 4)))
-    
   })
   
   output$dft <-  renderReactable({
