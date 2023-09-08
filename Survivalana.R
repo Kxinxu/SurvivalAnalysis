@@ -770,7 +770,7 @@ server <- function(input,output){
   
   output$level <- renderUI({
     req(input$file1)
-    
+    req(input$order)
     if(input$order == F)     
       return(NULL)
     file <- input$file1
