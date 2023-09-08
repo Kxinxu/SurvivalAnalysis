@@ -45,16 +45,19 @@ ui <- dashboardPage(
                 box(
                   title = "KM Plot", width = 7, solidHeader = T, status = "success",
                   fluidRow(
-                    column(12,
-                           downloadButton("KMplotwmf", "Download as WMF file"),
-                           downloadButton("KMplotpng", "Download as PNG file"),
-                           downloadButton("kmppt","Download as Powerpoint")),
-                    column(6,
-                           br(),
+                    column(3,
                            numericInput("pwd","Width (inch)",value = 6,width = "80%")),
-                    column(6,
-                           br(),
+                    column(3,
                            numericInput("pht","Height (inch)",value = 4,width = "80%")),
+                    column(3,
+                           selectInput("dltype","Select file type",
+                                       choices = c("WMF"="wmf",
+                                                   "PNG"="png",
+                                                   #"Powerpoint" = "pptx",
+                                                   "PDF"="pdf"))),
+                    column(3,
+                           br(),
+                           downloadButton("kmd","Download")),
                     column(12,
                            uiOutput("plotui"),
                            
@@ -79,15 +82,23 @@ ui <- dashboardPage(
                                          uiOutput("excel"),
                                          uiOutput("excelcensored")
                                   ),
+
                                   column(4,
                                          uiOutput("sbg"),
                                          uiOutput("sgvar"),
                                          uiOutput("sgval")
                                   ),
-                                  
                                   column(12,
+                                         uiOutput("order")
+                                  ),
+                                  column(8,
+                                         uiOutput("level")
+                                  ),
+                                  column(12,
+                                         br(),
                                          uiOutput("color"),
                                          actionButton("labn","Refresh")),
+
                                 )
                        ),
                        tabPanel("Axis",
@@ -229,12 +240,7 @@ ui <- dashboardPage(
                                          br(),
                                          checkboxInput("cpb",tags$b("Check for plot border"),value = T),
                                          numericInput("brerd","The maximum break of x-axis",value = NULL)),
-                                  column(12,
-                                         checkboxInput("order", tags$b("Need order adjustment for the label display"))
-                                  ),
-                                  column(12,
-                                         uiOutput("level")
-                                  )
+
                                 )
                        )
                 )
@@ -306,11 +312,6 @@ ui <- dashboardPage(
                      ),
                      tabPanel("Label",
                               fluidRow(
-                                column(6,
-                                       textInput("lal","Treatment Group label",value = "Treatment Group")
-                                ),
-                                column(6,
-                                       textInput("ral","Reference Group label",value = "Reference Group")),
                                 column(12,
                                        uiOutput("ch")
                                 ),
@@ -322,13 +323,17 @@ ui <- dashboardPage(
                      tabPanel("Addition",
                               fluidRow(
                                 column(6,
-                                       numericInput("leed","Left end of coordinate",value = NULL)),
+                                       textInput("lal","Treatment Group label",value = "Treatment Group")
+                                ),
                                 column(6,
-                                       numericInput("ried","Right end of coordinate",value = NULL)),
+                                       textInput("ral","Reference Group label",value = "Reference Group")),
                                 column(6,
-                                       checkboxInput("med",tags$b("Need median information"),value = T),
+                                       checkboxInput("hr",tags$b("Show Hazard Ratio(95% CI)"),value = T),
+                                       checkboxInput("med",tags$b("Show median information"),value = T),
                                        checkboxInput("pool",tags$b("Need pooled patient's information"),value = T),
+                                       checkboxInput("ctr",tags$b("Show p-value for treatment"),value = T),
                                        checkboxInput("cin",tags$b("Show p-value for interaction"),value = T),
+                                       uiOutput("frcol")
                                 ),
                                 column(6,
                                        numericInput("nbk","Number of indents for subgroup categories",value = 4),
@@ -336,7 +341,10 @@ ui <- dashboardPage(
                                        numericInput("frf","Fontsize of the text",value = 12)
                                 ),
                                 column(6,
-                                ),
+                                       numericInput("leed","Left end of coordinate",value = NULL)),
+                                column(6,
+                                       numericInput("ried","Right end of coordinate",value = NULL)),
+                                
                               )),
                      tabPanel("Survival Rates",
                               fluidRow(
@@ -379,13 +387,17 @@ ui <- dashboardPage(
                            ),
                            column(6,
                                   fileInput("cinfile","Upload configuration file to plot")),
-                           
-                           column(12,
-                                  downloadButton("dlFR", "WMF file"),
-                                  downloadButton("dlFRp", "PNG file"),
-                                  downloadButton("dlFRppt","SVG file"),
-                                  downloadButton("frppt","PPTX file")
-                           ),
+                           column(3,
+                                  selectInput("frdltype","Select file type",
+                                              choices = c("WMF"="wmf",
+                                                          "PNG"="png",
+                                                          "SVG"="svg",
+                                                          "Powerpoint" = "pptx",
+                                                          "PDF"="pdf"))),
+                           column(3,
+                                  br(),
+                                  downloadButton("frd","Download")),
+
                            column(12,
                                   plotOutput("FRPlot",height = "600px")
                            ))
@@ -750,13 +762,20 @@ server <- function(input,output){
     }
   })
   
+  output$order <- renderUI({
+    req(input$file1)
+    checkboxInput("order", tags$b("Need order adjustment for the label display"))
+  })
+  
+  
   output$level <- renderUI({
+    req(input$file1)
+    
     if(input$order == F)     
       return(NULL)
     file <- input$file1
     val = unlist(levels(data()$TRTP))
     rank_list(
-      text = "Drag the items in any desired order",
       labels = val,
       input_id = "rank_list")
   })
@@ -911,6 +930,7 @@ server <- function(input,output){
   
   #----Adjust the order------------
   data_final <- reactive({
+    req(data())
     if(input$order == T){
       data <- data()
       data$TRTP = factor(data$TRTP,levels = input$rank_list)
@@ -1136,7 +1156,7 @@ server <- function(input,output){
       risktable <- data.frame(x=x,trt=trt,atrisk=atrisk)
       risktable$trt = factor(risktable$trt,levels = rev(laname()))
       r <- ggplot(data = risktable,aes(x=x,y=trt))+
-        geom_text(label=risktable$atrisk,size = input$sizer/.pt,family = "Times New Roman") +
+        geom_text(label=risktable$atrisk,size = input$sizer/.pt,family = "serif") +
         coord_cartesian(xlim = c(0,input$brerd),clip = "off") +
         scale_x_continuous(breaks = 0:10,expand = c(0, 0)) +
         theme_minimal() + 
@@ -1167,51 +1187,29 @@ server <- function(input,output){
     p
   })
   
-  output$kmppt <- downloadHandler(
+  output$kmd <- downloadHandler(
     filename = function(){
-      "kmplot.pptx"
+      paste("kmplot",input$dltype,sep = ".")
     },
     content = function(file){
-      doc = read_pptx()
-      doc <- add_slide(doc,"Title and Content", "Office Theme")
-      p <- kmplot()
-      p <- ggsurvfit_build(p,combine_plots = T)
-      p <- dml(ggobj = p)
-      doc <- ph_with(doc,value = p,location = ph_location(width = input$pwd,height = input$pht))
-      print(doc,target = file)
+      if(input$dltype == "pptx"){
+          doc = read_pptx()
+          doc <- add_slide(doc,"Blank", "Office Theme")
+          p <- kmplot()
+          p <- ggsurvfit_build(p,combine_plots = T)
+          p <- dml(ggobj = p)
+          doc <- ph_with(doc,value = p,location = ph_location(width = input$pwd,height = input$pht))
+          print(doc,target = file)
+      }else{
+        p <- kmplot()
+        p <- ggsurvfit_build(p,combine_plots = T)
+        ggsave(file,plot = print(p),device = input$dltype,width = input$pwd,height=input$pht,units = "in")
+      }
+
     }
   )
   
-  output$KMplotwmf <- downloadHandler(
-    filename = function(){
-      "kmplot.wmf"
-    },
-    content = function(file){
-      
-      p <- kmplot()
-      p <- ggsurvfit_build(p,combine_plots = T)
-      ggsave(file,plot = print(p),device = "wmf",width = input$pwd,height=input$pht,units = "in")
-      
-      # win.metafile(file,width = 12,height = 7)
-      # plot(kmplot())
-      # dev.off()
-    }
-    
-  )
-  
-  output$KMplotpng <- downloadHandler(
-    filename = function(){
-      "kmplot.png"
-    },
-    content = function(file){
-      
-      p <- kmplot() 
-      
-      ggsave(file,plot = p,device = "png",width = input$pwd,height = input$pht,units = "in")
-    }
-    
-  )
-  
+
   
   
   ##==============Forest plot=========================  
@@ -1894,8 +1892,12 @@ server <- function(input,output){
         ciu <- append(ciu,"")
         cil <- append(cil,"")
         p_v <- append(p_v,"")
-        req(length(input[[paste("cta_",i)]])>1)
-        info1 <- info[info[[i]] %in% as.vector(input[[paste("cta_",i)]]),]
+        req(input[[paste("cta_",i)]])
+        if(length(input[[paste("cta_",i)]])>1){
+          info1 <- info[info[[i]] %in% as.vector(input[[paste("cta_",i)]]),]
+        }else{
+          info1 <- info
+        }
         p_v_i <- append(p_v_i,ifelse(summary(coxph(Surv(AVAL,status) ~ TRTP + info1[[i]] + TRTP*info1[[i]],data = info1))$coefficients[3,5] < 0.0001,"<0.0001",format(round(summary(coxph(Surv(AVAL,status) ~ TRTP + info1[[i]] + TRTP*info1[[i]],data = info1))$coefficients[3,5],4),nsmall = 4)))
         a1 <- append(a1,lab[[idx]])
         a2 <- append(a2,"subgroup")
@@ -1975,7 +1977,7 @@ server <- function(input,output){
     colnames(data)<-c("Subgroup","No. of Patient","Treatment_Event","Reference_Event",
                       "Treat_N","Refer_N"," ","Treatment Median","Reference Median","Treatment Lower",
                       "Treatment Upper","Reference Lower","Reference Upper","HR","lower","upper",
-                      "Treatment","Interaction","sub1","HR (95% CI)",input$lal,input$ral,"Type",
+                      "P Value","P Interaction","sub1","HR (95% CI)",input$lal,input$ral,"Type",
                       paste(input$lal,"E/N"),paste(input$ral,"E/N"))
     data
     #  data$"Treatment Group Median"
@@ -2095,7 +2097,7 @@ server <- function(input,output){
     },
     content = function(file) {
       data <- cha_df()[,c(1:6,8:18,23)]
-      
+      data$Parameter <- input$frpara
       write.csv(data,file,row.names = F)
     }
   )
@@ -2127,6 +2129,91 @@ server <- function(input,output){
     max(c(w/width_wanted,h/height_wanted))
   }
   
+  frtable <- reactive({
+    req(input$FRtable)
+    file <- input$FRtable
+    df <- read.csv(file$datapath,sep = ",",header = TRUE,check.names = F,stringsAsFactors = F)
+    df[,1] <- ifelse(df[,ncol(df)]=="level",paste(paste(rep(" ",input$nbk),collapse = ""),df[,1]),df[,1])
+    df[,2] <- ifelse(is.na(df[,2]),"",df[,2])
+    df[,16] <- ifelse(is.na(df[,16]),"",df[,16])
+    df[,17] <- ifelse(is.na(df[,17]),"",df[,17])
+    df$"HR (95% CI)" = ifelse(is.na(df$HR),"",sprintf("%.2f (%.3f, %.3f)",
+                                                      df$HR,df$lower,df$upper))
+    df$"TreatmentGroup Median" = ifelse(is.na(df$HR),"",sprintf("%.1f (%.1f, %.1f)",
+                                                                df$"Treatment Median",df$"Treatment Lower",df$"Treatment Upper"))
+    df$"TreatmentGroup Median" = gsub("NA","NE",df$"TreatmentGroup Median")
+    df$"ReferenceGroup Median" = ifelse(is.na(df$HR),"",sprintf("%.1f (%.1f, %.1f)",
+                                                                df$"Reference Median",df$"Reference Lower",df$"Reference Upper"))
+    df$"ReferenceGroup Median" = gsub("NA","NE",df$"ReferenceGroup Median")
+    df$"Treatment Event/N" = ifelse(is.na(df$HR),"",paste(df$"Treatment_Event","/",df$"Treat_N"))
+    df$"Reference Event/N" = ifelse(is.na(df$HR),"",paste(df$"Reference_Event","/",df$"Refer_N"))
+    df[,25] <- paste(rep(" ",35),collapse = " ")
+    
+    colnames(df)<-c("Subgroup","No. of Patient","Treatment_Event","Reference_Event",
+                    "Treat_N","Refer_N","Treatment Median","Reference Median","Treatment Lower",
+                    "Treatment Upper","Reference Lower","Reference Upper","HR","lower","upper",
+                    "P Value","P Interaction","Type","Parameter","Hazard Ratio(95% CI)",input$lal,input$ral,
+                    paste(input$lal,"E/N"),paste(input$ral,"E/N")," ")
+    df
+    
+  })
+  
+  output$frcol <- renderUI({
+    if(!is.null(input$FRfile0)){
+      if(!is.null(cha_df())){
+        df <- cha_df()
+        col <- c(1,7)
+        if(input$pool == T){
+          col <- append(col,2)
+        }else{
+          col <- append(col,c(24,25))
+        }
+        if(input$med == T){
+          col <- append(col,c(21,22))
+        }
+        if(input$hr == T){
+          col <- append(col,20)
+        }
+        if(input$ctr == T){
+          col <- append(col,17)
+        }
+        if(input$cin == T){
+          col <- append(col,18)
+        }
+        val = colnames(df[,col])
+        print(val)
+        rank_list(
+          labels = val,
+          input_id = "fr_col")
+      }
+    }else if(!is.null(input$FRtable)){
+      df <- frtable()
+      col <- c(1,25)
+      if(input$pool == T){
+        col <- append(col,2)
+      }else{
+        col <- append(col,c(23,24))
+      }
+      if(input$med == T){
+        col <- append(col,c(21,22))
+      }
+      if(input$hr == T){
+        col <- append(col,20)
+      }
+      if(input$ctr == T){
+        col <- append(col,16)
+      }
+      if(input$cin == T){
+        col <- append(col,17)
+      }
+      val = colnames(df[,col])
+      print(val)
+      rank_list(
+        labels = val,
+        input_id = "fr_col")
+    }
+  })
+##-----------draw forest polt----------------  
   frp <- reactive({
     tm <- forest_theme(base_size = input$frf,
                        base_family = "serif",
@@ -2144,46 +2231,39 @@ server <- function(input,output){
     if(!is.null(input$FRfile0)){
       if(!is.null(cha_df())){
         df <- cha_df()
+        cicol = 3
+        col = c(1,2,7,21,22,20,17,18)
         if(input$pool == T){
-          cicol = 3
-          if(input$cin == T){
-            if(input$med == F){
-              col = c(1,2,7,20,17,18)
-            }else{
-              col = c(1,2,7,22,21,20,17,18)
-            }
-            
-          }
-          else{
-            if(input$med == F){
-              col = c(1,2,7,20,17)
-            }else{
-              col = c(1,2,7,22,21,20,17)
-            }
-            
-          }
+          mtcol = 4
+          mrcol = 5
+        }else{
+          mtcol = 5
+          mrcol = 6
         }
-        else{
-          cicol = 4
-          if(input$cin == T){
-            if(input$med == F){
-              col = c(1,24,25,7,20,17,18)
-            }else{
-              col = c(1,24,25,7,21,22,20,17,18)
-            }
-          }
-          else{
-            if(input$med == F){
-              col = c(1,24,25,7,20,17)
-            }else{
-              col = c(1,24,25,7,21,22,20,17)
-            }
-          }
-        }
+        
+        ntcol = 2
+        nrcol = 3
+
+
         df$Subgroup[df$Type == "level"] = paste(paste(rep(" ",input$nbk),collapse = ""),df$Subgroup[df$Type == "level"])
         req(input$leed)
         req(input$ried)
-        
+        if(!is.null(input$fr_col)){
+          val = as.vector(input$fr_col)
+          req(val %in% colnames(df))
+          b = which(val == "")
+          val[b] <- " "
+          col = c()
+          for (i in val) {
+            col = append(col,which(colnames(df) == i))
+          }
+          cicol = which(val == " ")
+          mtcol = which(val == input$lal)
+          mrcol = which(val == input$ral)
+          ntcol = which(val == paste(input$lal,"E/N"))
+          nrcol = which(val == paste(input$ral,"E/N"))
+          
+        }
         g <- forest(df[,col],
                     est = df$HR,
                     lower = df$lower,
@@ -2198,39 +2278,22 @@ server <- function(input,output){
                     theme = tm
         )
         g <- edit_plot(g,col = c(2:length(col)),which = "text",hjust=unit(0.5,"npc"),x=unit(0.5,"npc"))
-        if(input$pool == T){
-          if(input$med == T){
-            g <- insert_text(g,text = "Median (95% CI) (Months)",col = 4:5,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
-            g <- add_text(g,text = "p-value for",row = 1,col = 7,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
-          }else{
-            g <- insert_text(g,text = "p-value for",col = 5,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
-          }
-          if(input$cin == T){
-            if(input$med == T){
-              g <- add_text(g,text = "p-value for",row = 1,col = 8,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
-            }else{
-              g <- add_text(g,text = "p-value for",row = 1,col = 6,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
-            }
-            g
-          }
-          
-          g
+        
+
+        if(input$med == T){
+          req(length(mtcol) != 0)
+          req(length(mrcol) != 0)
+          g <- insert_text(g,text = "Median (95% CI) (Months)",col = mtcol:mrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
         }
-        else{
-          g <- insert_text(g,text = "Number of events/N",row = 1,col = 2:3,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
+        
+        if(input$pool == F){
+          req(length(ntcol) != 0)
+          req(length(nrcol) != 0)
           if(input$med == T){
-            g <- add_text(g,text = "Median (95% CI) (Months)",row = 1, col = 5:6,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
-            not = 8
-            noi = 9
+            g <- add_text(g,text = "Number of events/N",row = 1,col = ntcol:nrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
           }else{
-            not = 6
-            noi = 7
+            g <- insert_text(g,text = "Number of events/N",col = ntcol:nrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
           }
-          if(input$cin == T){
-            g <- add_text(g,text = "p-value for",row = 1,col = noi,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
-          }
-          g <- add_text(g,text = "p-value for",row = 1,col = not,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
-          
         }
         
         g <- insert_text(g,
@@ -2246,8 +2309,7 @@ server <- function(input,output){
       }
     }
     else if(!is.null(input$FRtable)){
-      file <- input$FRtable
-      df <- read.csv(file$datapath,sep = ",",header = TRUE,check.names = F,stringsAsFactors = F)
+      df <- frtable()
       if(min(df$lower,na.rm = T) <= 0.25){
         le <- 0.125
       }
@@ -2268,86 +2330,41 @@ server <- function(input,output){
       else{
         re <- 2
       }
-      if(input$pool == T){
-        cicol = 3
-        if(input$cin == T){
-          if(input$med == T){
-            col = c(1,2,3,20,21,19,16,17)
-          }else{
-            col = c(1,2,3,19,16,17)
-          }
-        }
-        else{
-          if(input$med == T){
-            col = c(1,2,3,20,21,19,18)
-          }else{
-            col = c(1,2,3,19,18)
-          }
-        }
-        df[,1] <- ifelse(df[,ncol(df)]=="level",paste(paste(rep(" ",input$nbk),collapse = ""),df[,1]),df[,1])
-        df[,2] <- ifelse(is.na(df[,2]),"",df[,2])
-        df[,3] <- paste(rep(" ",35),collapse = " ")
-        colnames(df)[3] <- " "
-        df[,16] <- ifelse(is.na(df[,16]),"",df[,16])
-        df[,17] <- ifelse(is.na(df[,17]),"",df[,17])
-        df$"HR (95% CI)" = ifelse(is.na(df$HR),"",sprintf("%.2f (%.3f, %.3f)",
-                                                          df$HR,df$lower,df$upper))
-        df$"TreatmentGroup Median" = ifelse(is.na(df$HR),"",sprintf("%.1f (%.1f, %.1f)",
-                                                                    df$"Treatment Median",df$"Treatment Lower",df$"Treatment Upper"))
-        df$"TreatmentGroup Median" = gsub("NA","NE",df$"TreatmentGroup Median")
-        df$"ReferenceGroup Median" = ifelse(is.na(df$HR),"",sprintf("%.1f (%.1f, %.1f)",
-                                                                    df$"Reference Median",df$"Reference Lower",df$"Reference Upper"))
-        df$"ReferenceGroup Median" = gsub("NA","NE",df$"ReferenceGroup Median")
-        print(colnames(df))
-        colnames(df)<-c("Subgroup","No. of Patient"," ","Reference_Event",
-                        "Treat_N","Refer_N","Treatment Median","Reference Median","Treatment Lower",
-                        "Treatment Upper","Reference Lower","Reference Upper","HR","lower","upper",
-                        "Treatment","Interaction","Type","HR (95% CI)",input$lal,input$ral)
-        
-        print(df)
+      if(!is.na(input$leed)){
+        print(input$leed)
+        le <- input$leed
       }
-      else{
-        cicol = 4
-        if(input$cin == T){
-          if(input$med == T){
-            col = c(1,22,23,2,20,21,19,16,17)
-          }else{
-            col = c(1,22,23,2,19,16,17)
-          }
+      if(!is.na(input$ried)){
+        re <- input$ried
+      }
+      cicol = 3
+      col = c(1,2,25,21,22,20,16,17)
+      if(input$pool == T){
+        mtcol = 4
+        mrcol = 5
+      }else{
+        mtcol = 5
+        mrcol = 6
+      }
+      
+      ntcol = 2
+      nrcol = 3
+      
+      
+      if(!is.null(input$fr_col)){
+        val = as.vector(input$fr_col)
+        print(val)
+        b = which(val == "")
+        val[b] <- " "
+        col = c()
+        for (i in val) {
+          col = append(col,which(colnames(df) == i))
         }
-        else{
-          if(input$med == T){
-            col = c(1,22,23,2,20,21,19,16)
-          }else{
-            col = c(1,22,23,2,19,16)
-          }
-        }
-        df[,1] <- ifelse(df[,ncol(df)]=="level",paste(paste(rep(" ",input$nbk),collapse = ""),df[,1]),df[,1])
-        df[,2] <- paste(rep(" ",30),collapse = " ")
-        colnames(df)[2] <- " "
-        df[,16] <- sapply(df[,16],format_num)
-        df[,16] <- ifelse(df[,16]=="NA","",df[,16])
-        df[,17] <- sapply(df[,17],format_num)
-        df[,17] <- ifelse(df[,17]=="NA","",df[,17])
-        
-        
-        df$"HR (95% CI)" = ifelse(is.na(df$HR),"",sprintf("%.2f (%.3f, %.3f)",
-                                                          df$HR,df$lower,df$upper))
-        df$"HR (95% CI)" = gsub("NA","NE",df$"HR (95% CI)")
-        df$"TreatmentGroup Median" = ifelse(is.na(df$HR),"",sprintf("%.1f (%.1f, %.1f)",
-                                                                    df$"Treatment Median",df$"Treatment Lower",df$"Treatment Upper"))
-        df$"TreatmentGroup Median" = gsub("NA","NE",df$"TreatmentGroup Median")
-        df$"ReferenceGroup Median" = ifelse(is.na(df$HR),"",sprintf("%.1f (%.1f, %.1f)",
-                                                                    df$"Reference Median",df$"Reference Lower",df$"Reference Upper"))
-        df$"ReferenceGroup Median" = gsub("NA","NE",df$"ReferenceGroup Median")
-        df$"Treatment Event/N" = ifelse(is.na(df$HR),"",paste(df$"Treatment_Event","/",df$"Treat_N"))
-        df$"Reference Event/N" = ifelse(is.na(df$HR),"",paste(df$"Reference_Event","/",df$"Refer_N"))
-        print(df)
-        colnames(df)<-c("Subgroup"," ","Treatment_Event","Reference_Event",
-                        "Treat_N","Refer_N","Treatment Median","Reference Median","Treatment Lower",
-                        "Treatment Upper","Reference Lower","Reference Upper","HR","lower","upper",
-                        "Treatment","Interaction","Type","HR (95% CI)",input$lal,input$ral,
-                        paste(input$lal,"E/N"),paste(input$ral,"E/N"))
+        cicol = which(val == " ")
+        mtcol = which(val == input$lal)
+        mrcol = which(val == input$ral)
+        ntcol = which(val == paste(input$lal,"E/N"))
+        nrcol = which(val == paste(input$ral,"E/N"))
         
       }
       g <- forest(df[,col],
@@ -2363,46 +2380,57 @@ server <- function(input,output){
                   theme = tm)
       g <- edit_plot(g,col = c(2:length(col)),which = "text",hjust=unit(0.5,"npc"),x=unit(0.5,"npc"))
       
-      if(input$pool == T){
-        if(input$med == T){
-          g <- insert_text(g,text = "Median (95% CI) (Months)",col = 4:5,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
-          g <- add_text(g,text = "p-value for",row = 1,col = 7,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
-        }else{
-          g <- insert_text(g,text = "p-value for",col = 5,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
-        }
-        if(input$cin == T){
-          if(input$med == T){
-            g <- add_text(g,text = "p-value for",row = 1,col = 8,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
-          }else{
-            g <- add_text(g,text = "p-value for",row = 1,col = 6,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
-          }
-        }
-        else{g}
+      
+
+      if(input$med == T){
+        req(length(mtcol) != 0)
+        req(length(mrcol) != 0)
+        g <- insert_text(g,text = "Median (95% CI) (Months)",col = mtcol:mrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
       }
-      else{
-        g <- insert_text(g,text = "Number of events/N",col = 2:3,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
+
+      if(input$pool == F){
+        req(length(ntcol) != 0)
+        req(length(nrcol) != 0)
         if(input$med == T){
-          g <- add_text(g,text = "Median (95% CI) (Months)",row = 1,col = 5:6,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
-          g <- add_text(g,text = "p-value for",row = 1,col = 8,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
+          g <- add_text(g,text = "Number of events/N",row = 1,col = ntcol:nrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
         }else{
-          g <- add_text(g,text = "p-value for",row = 1,col = 6,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
-          g
+          g <- insert_text(g,text = "Number of events/N",col = ntcol:nrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
         }
-        if(input$cin == T){
-          if(input$med == T){
-            nocol = 9
-          }else{
-            nocol = 7
-          }
-          g <- add_text(g,text = "p-value for",row = 1,col = nocol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
-        }
-        else(g)
       }
-      g <- insert_text(g,
-                       text = "",
-                       row = nrow(df)+1,
-                       part = "body",
-                       gp = gpar(fontsize = 2))
+      print(unique(df$Parameter))
+      if(length(unique(df$Parameter))>1){
+        n = 1
+        s = table(df$Parameter)
+        print(s)
+        for(i in unique(df$Parameter)){
+          g <- insert_text(g,
+                           text = "",
+                           row = n,
+                           part = "body",
+                           gp = gpar(fontsize = 2))
+          n = n+1
+          g <- insert_text(g,
+                           text = i,
+                           row = n,
+                           part = "body",
+                           just = "left",
+                           gp = gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
+          n = n+s[i]+1
+        }
+        g <- insert_text(g,
+                         text = "",
+                         row = nrow(df)+2*length(unique(df$Parameter))+1,
+                         part = "body",
+                         gp = gpar(fontsize = 2))
+
+      }else{
+        g <- insert_text(g,
+                         text = "",
+                         row = nrow(df)+1,
+                         part = "body",
+                         gp = gpar(fontsize = 2))        
+      }
+
       g
     }
     else{
@@ -2417,59 +2445,32 @@ server <- function(input,output){
     frp()
   },res = 80)
   
-  
-  
-  output$dlFR <- downloadHandler(
+  output$frd <- downloadHandler(
     filename = function(){
-      "forestplot.wmf"
+      paste("forestplot",input$frdltype,sep = ".")
     },
     content = function(file){
-      # win.metafile(file,width = 18,height = 20)
-      # frp()
-      # dev.off()
-      # wd <- get_wh(frp(),unit = "in")
-      p_sc <- get_scale(plot = frp(),width_wanted = 12,height_wanted = 6,unit = "in")
-      wh <- get_wh(frp(),unit = "in")
-      ggsave(file,plot = plot(frp()),device = "wmf",width = wh[1],height=wh[2],units = "in")
-    }
-  )
-  
-  output$dlFRppt <- downloadHandler(
-    filename = function(){
-      "forestplot.svg"
-    },
-    content = function(file){
-      
-      p_sc <- get_scale(plot = frp(),width_wanted = 13,height_wanted = 8,unit = "in")
-      wh <- get_wh(frp(),unit = "in")
-      ggsave(file,plot = frp(),device = "svg",width = wh[1],height= wh[2],units = "in")
+      if(input$frdltype == "pptx"){
+        doc = read_pptx()
+        doc <- add_slide(doc,"Blank", "Office Theme")
+        p <- frp()
+        p <- dml(ggobj = p)
+        wh <- get_wh(frp(),unit = "in")
+        doc <- ph_with(doc,value = p,location = ph_location(width = wh[1],height= wh[2]))
+        print(doc,target = file)
+      }else{
+        p_sc <- get_scale(plot = frp(),width_wanted = 13,height_wanted = 8,unit = "in")
+        wh <- get_wh(frp(),unit = "in")
+        ggsave(file,plot = frp(),device = input$frdltype,width = wh[1],height= wh[2],units = "in")
+
+      }
       
     }
   )
   
-  output$frppt <- downloadHandler(
-    filename = function(){
-      "frplot.pptx"
-    },
-    content = function(file){
-      doc = read_pptx()
-      doc <- add_slide(doc,"Title and Content", "Office Theme")
-      plot <- frp()
-      plot <- dml(plot)
-      doc <- ph_with(doc,value = plot,location = ph_location(width = input$pwd,height = input$pht))
-      print(doc,target = file)
-      dev.off()
-    }
-  )
+ 
   
-  output$dlFRp <- downloadHandler(
-    filename = function(){
-      "forestplot.png"
-    },
-    content = function(file){
-      ggsave(file,plot = frp(),device = "png",width = 20,height=15,units = "in")
-    }
-  )
+
   
 }
 
