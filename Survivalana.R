@@ -4,6 +4,7 @@ library(DT)
 library(purrr)
 library(dplyr)
 library(tidyr)
+library(tidyverse)
 library(readxl)
 library(haven)
 library(survival)
@@ -53,7 +54,7 @@ ui <- dashboardPage(
                            selectInput("dltype","Select file type",
                                        choices = c("WMF"="wmf",
                                                    "PNG"="png",
-                                                   #"Powerpoint" = "pptx",
+                                                   "Powerpoint" = "pptx",
                                                    "PDF"="pdf"))),
                     column(3,
                            br(),
@@ -82,7 +83,7 @@ ui <- dashboardPage(
                                          uiOutput("excel"),
                                          uiOutput("excelcensored")
                                   ),
-
+                                  
                                   column(4,
                                          uiOutput("sbg"),
                                          uiOutput("sgvar"),
@@ -98,7 +99,7 @@ ui <- dashboardPage(
                                          br(),
                                          uiOutput("color"),
                                          actionButton("labn","Refresh")),
-
+                                  
                                 )
                        ),
                        tabPanel("Axis",
@@ -111,11 +112,11 @@ ui <- dashboardPage(
                                          actionButton("text",tags$b("Submit"))
                                   ),
                                   column(6,
-                                         h5("Font size of the text on y-axis & x-axis"),
+                                         h5("Font size of the titles of y/x axis"),
                                          actionButton("sizey_up",icon("plus"),width = "18%"),
                                          actionButton("sizey_down",icon("minus"),width = "18%"),
                                          numericInput("sizey",NULL,value = 12,width = "37%"),
-                                         h5("Font size of the number on y-axis & x-axis"),
+                                         h5("Font size of the number on y/x axis"),
                                          actionButton("sizen_up",icon("plus"),width = "18%"),
                                          actionButton("sizen_down",icon("minus"),width = "18%"),
                                          numericInput("sizen",NULL,value = 9,width = "37%")),
@@ -125,7 +126,8 @@ ui <- dashboardPage(
                                          actionButton("tup",icon("plus"),width = "18%")),
                                   column(12,
                                          br(),
-                                         numericInput("interval","The range of interval a tick marks to placed",value = 3),
+                                         numericInput("interval","The range of interval a tick mark to placed",value = 3),
+                                         numericInput("brerd","The right end of x-axis",value = NULL)
                                   )
                                 )),
                        tabPanel("Legend",
@@ -191,7 +193,7 @@ ui <- dashboardPage(
                                          uiOutput("deci")
                                   ),
                                   column(6,
-                                         actionButton("q_a_a","Plot Quantile Annotation")
+                                         actionButton("q_a_a","Plot")
                                   )
                                 )),
                        tabPanel("Additional",
@@ -239,8 +241,8 @@ ui <- dashboardPage(
                                   column(12,
                                          br(),
                                          checkboxInput("cpb",tags$b("Check for plot border"),value = T),
-                                         numericInput("brerd","The maximum break of x-axis",value = NULL)),
-
+                                  ),
+                                  
                                 )
                        )
                 )
@@ -277,7 +279,10 @@ ui <- dashboardPage(
                                 ),
                                 
                                 column(6,
-                                       selectInput("tie","Select handling method for tied events", choices = c("efron" = "efron",   "exact('discret' in SAS)" = "exact", "breslow" = "breslow"), selected = "efron")),
+                                       selectInput("tie","Handling method for tied events", 
+                                                   choices = c("efron" = "efron",   "exact('discret' in SAS)" = "exact", "breslow" = "breslow"), selected = "efron"),
+                                ),
+                                
                                 column(12,
                                        checkboxInput("icomb",tags$b("Internal combination: Need combination within a variable"),width = "100%"),
                                        uiOutput("icomb"),
@@ -288,9 +293,6 @@ ui <- dashboardPage(
                      ),
                      tabPanel("Selection",
                               fluidRow(
-                                column(6,
-                                       checkboxInput("saf",tags$b("Applying stratified analysis on Forest Plot")),
-                                       uiOutput("savar")),
                                 column(12,
                                        tags$h5(style = "font-weight : bold;","Select the subgroup to analyze")),
                                 column(6,
@@ -307,7 +309,17 @@ ui <- dashboardPage(
                                            ))),
                                 
                                 column(6,
-                                       uiOutput("e")),
+                                       div(style = "max-height : 600px;
+                                                    overflow-y : auto;",
+                                           uiOutput("e"))
+                                ),
+                                column(12,
+                                       br()),
+                                column(6,
+                                       checkboxInput("saf",tags$b("Applying stratified analysis on Forest Plot")),
+                                       uiOutput("savar")),
+                                
+                                
                               )
                      ),
                      tabPanel("Label",
@@ -322,6 +334,12 @@ ui <- dashboardPage(
                      ),
                      tabPanel("Addition",
                               fluidRow(
+                                column(12,
+                                       radioButtons("liki","Type of Confidence Interval", 
+                                                    choices = c("Wald" = "wald","Profile Likelihood Based" = "prof"),
+                                                    inline = T
+                                       )
+                                ),
                                 column(6,
                                        textInput("lal","Treatment Group label",value = "Treatment Group")
                                 ),
@@ -341,6 +359,7 @@ ui <- dashboardPage(
                                        numericInput("frf","Fontsize of the text",value = 12)
                                 ),
                                 column(6,
+                                       selectInput("scale","Axis scale",choices = c("none"="none","log"="log"),selected = "log"),
                                        numericInput("leed","Left end of coordinate",value = NULL)),
                                 column(6,
                                        numericInput("ried","Right end of coordinate",value = NULL)),
@@ -397,9 +416,9 @@ ui <- dashboardPage(
                            column(3,
                                   br(),
                                   downloadButton("frd","Download")),
-
+                           
                            column(12,
-                                  plotOutput("FRPlot",height = "600px")
+                                  plotOutput("FRPlot",height = "800px")
                            ))
                 ),
                 tabPanel("Summary Table",
@@ -629,8 +648,8 @@ server <- function(input,output){
                  uiOutput("mtd"),
           ),
           column(6,
-                 selectInput("groupsas","Select the treatment variable",choices = setNames(c(1,col1),c(" ",lab1)),selected = NULL),
-                 selectInput("censas","Select the variable of censor",choices = setNames(c(1,col2),c(" ",lab2)),selected = NULL),
+                 selectInput("groupsas","Treatment variable",choices = setNames(c(1,col1),c(" ",lab1)),selected = NULL),
+                 selectInput("censas","Censor variable",choices = setNames(c(1,col2),c(" ",lab2)),selected = NULL),
                  uiOutput("sascensored")
           )
           
@@ -692,7 +711,7 @@ server <- function(input,output){
       if(input$censor != 1){
         file <- input$file1
         data <- read_excel(file$datapath)
-        checkboxGroupInput("censored","Select the value of censored", choices = setNames(unlist(unique(data[[input$censor]])),unlist(unique(data[[input$censor]]))))
+        checkboxGroupInput("censored","Value of censored", choices = setNames(unlist(unique(data[[input$censor]])),unlist(unique(data[[input$censor]]))))
       }
       else{return(NULL)}
     }
@@ -704,7 +723,7 @@ server <- function(input,output){
       if(input$censas != 1){
         file <- input$file1
         data <- read_sas(file$datapath)
-        checkboxGroupInput("censorsas", "Select the value of censored", choices = setNames(unique(data[[input$censas]]),unique(data[[input$censas]])))
+        checkboxGroupInput("censorsas", "Value of censored", choices = setNames(unique(data[[input$censas]]),unique(data[[input$censas]])))
       }
       else{return(NULL)}
     }
@@ -792,6 +811,7 @@ server <- function(input,output){
     orange <- c("darkorange","orange","orangered")
     purple <- c("mediumpurple","purple")
     yellow <- c("yellow","lightyellow")
+    grey <- c("grey")
     
     val = levels(data$TRTP)
     map(val,function(level){
@@ -803,10 +823,12 @@ server <- function(input,output){
                              choices = list("Black" = "black",
                                             "Blue" = blue,
                                             "Green" = green,
+                                            "Grey" = grey,
                                             "Yellow" = yellow,
                                             "Red" = red,
                                             "Purple" = purple,
-                                            "Orange" = orange)
+                                            "Orange" = orange
+                             )
                              ,selected = default_col)),
         column(3,selectInput(paste0("linetype_",level),label = "Linetype",
                              choices = list("solid" = "solid",
@@ -939,7 +961,6 @@ server <- function(input,output){
     }
     else{
       data <- data()
-      print(data)
       updateNumericInput(session = getDefaultReactiveDomain(),"brerd",value = round(max(data$AVAL),0)+1)
       data
     }
@@ -998,7 +1019,18 @@ server <- function(input,output){
     start=which(dif>0)+1
     start=c(1,start)
     
-    
+    #calculate the number of upper letter and lower letter
+    nupper = str_count(laname(),"[A-Z]")*2
+    print(nupper)
+    nlower = str_count(laname(),"[a-z]")
+    print(nlower)
+    if(sum(nupper) == 0 && sum(nlower) == 0){
+      nsymbol = (nchar(laname())-nupper-nlower)*3
+    }else(
+      nsymbol = (nchar(laname())-nupper-nlower)*2
+    )
+    print(nsymbol)
+    nstr = max(nupper+nlower+nsymbol)
     
     par(mar = c(0,0,0,0))
     p <- ggsurvfit(survfit(),type = "survival",linewidth = curveT(),linetype_aes = T,show.legend = F) +
@@ -1011,6 +1043,7 @@ server <- function(input,output){
       scale_x_continuous(
         breaks = seq(0,input$brerd,input$interval),
         expand = c(0,0)
+        #  limits = c(0,input$brerd)
       ) +
       scale_linetype_manual(values = vallinetype(),labels = laname()) +
       scale_color_manual(values = valcolors(),labels = laname()) +
@@ -1020,19 +1053,21 @@ server <- function(input,output){
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         axis.title.x = element_text(size = input$sizey,family="serif"),
-        axis.title.y = element_blank(),
+        axis.title.y = element_text(size = input$sizey,vjust = -nstr+1,family="serif"),
         axis.ticks.length = unit(tickLen(),"cm"),
         axis.ticks = element_line(linewidth = axisT()),
         axis.text.x = element_text(size = input$sizen,family="serif"),
         axis.text.y = element_text(size = input$sizen,family="serif")) +
       guides(fill = guide_legend(byrow = T)) +
       labs(
-        x = paste(xlab(),collapse = "\n")) +
-      annotation_custom(grob=textGrob(label = paste(ylab(),collapse = "\n"),
-                                      rot = 90,
-                                      gp = gpar(fontsize = input$sizey, fontfamily = "serif"),
-                                      x=-35,default.units = "pt")) +
-      coord_cartesian(xlim = c(0,input$brerd),clip = "off") 
+        x = paste(xlab(),collapse = "\n"),
+        y = paste(ylab(),collapse = "\n")) +
+      coord_cartesian(xlim = c(0,input$brerd)) 
+    # annotation_custom(grob=textGrob(label = paste(ylab(),collapse = "\n"),
+    #                                 rot = 90,
+    #                                 gp = gpar(fontsize = input$sizey, fontfamily = "serif"),
+    #                                 x=-35,default.units = "pt")) +
+    # coord_cartesian(xlim = c(0,input$brerd),clip = "off") 
     
     ##-----draw censor mark    
     groupsize=diff(c(start,length(fit$surv)+1))
@@ -1173,7 +1208,7 @@ server <- function(input,output){
                                      colour = rev(valcolors()),
                                      hjust = 0,
                                      size = input$sizer,
-                                     margin = margin(r=5)),
+                                     margin = margin(r=8)),
           title = element_text(family = "serif",
                                size = input$sizer),
           plot.title.position = "plot"
@@ -1193,23 +1228,23 @@ server <- function(input,output){
     },
     content = function(file){
       if(input$dltype == "pptx"){
-          doc = read_pptx()
-          doc <- add_slide(doc,"Blank", "Office Theme")
-          p <- kmplot()
-          p <- ggsurvfit_build(p,combine_plots = T)
-          p <- dml(ggobj = p)
-          doc <- ph_with(doc,value = p,location = ph_location(width = input$pwd,height = input$pht))
-          print(doc,target = file)
+        doc = read_pptx()
+        doc <- add_slide(doc,"Blank", "Office Theme")
+        p <- kmplot()
+        p <- ggsurvfit_build(p,combine_plots = T)
+        p <- dml(ggobj = p)
+        doc <- ph_with(doc,value = p,location = ph_location(width = input$pwd,height = input$pht))
+        print(doc,target = file)
       }else{
         p <- kmplot()
         p <- ggsurvfit_build(p,combine_plots = T)
         ggsave(file,plot = print(p),device = input$dltype,width = input$pwd,height=input$pht,units = "in")
       }
-
+      
     }
   )
   
-
+  
   
   
   ##==============Forest plot=========================  
@@ -1294,13 +1329,16 @@ server <- function(input,output){
       data$AVAL = data$AVAL/(365.25/12)
     }
     if(input$etr == T){
+      req(input$extrainfo)
+      req(input$extrainfo1)
       data["Extraparam"] = data[input$extrainfo]
       data <- subset(data,Extraparam %in% as.vector(input$extrainfo1))
     }
     if(input$tgp == T){
+      req(input$tgpvar)
+      req(input$tgpval)
       data["ScreenedG"] = data[input$tgpvar]
       data <- subset(data,ScreenedG %in% as.vector(input$tgpval))
-      print(unique(data["ScreenedG"]))
     }
     
     if(!is.null(input$icomname) && !is.null(input$icomlabel)){
@@ -1406,7 +1444,7 @@ server <- function(input,output){
     if(input$tgp == T){
       data <- all_info()
       labelsl = data %>% map(attr_getter("label"))
-      selectInput("tgpvar","Select the filtration variable",choices = setNames(names(data),labelsl))
+      selectInput("tgpvar","Select the filtration variable",choices = setNames(colnames(data),labelsl))
     }else{
       return(NULL)
     }
@@ -1416,6 +1454,7 @@ server <- function(input,output){
     if(input$tgp == T){
       data <- all_info()
       labelsl = data %>% map(attr_getter("label"))
+      req(input$tgpvar)
       var = unlist(unique(data[[input$tgpvar]]))
       checkboxGroupInput("tgpval",label = NULL, choices = setNames(var,var))
     }else{
@@ -1438,6 +1477,7 @@ server <- function(input,output){
     if(input$etr == T){
       data <- all_info()
       labelsl = data %>% map(attr_getter("label"))
+      req(input$extrainfo)
       var = unlist(unique(data[input$extrainfo]))
       checkboxGroupInput("extrainfo1",label = NULL, choices = setNames(var,var))
     }else{
@@ -1496,6 +1536,7 @@ server <- function(input,output){
       if(length(levels(info$TRTP))>1){
         if(length(input$ref) > 0){
           info$TRTP <- relevel(info$TRTP,input$ref)
+          info$TRTP <- ifelse(info$TRTP == input$ref,0,1)
         }
       }else
         return(NULL)
@@ -1505,8 +1546,8 @@ server <- function(input,output){
     
     info$event <- ifelse(info$CNSR == 0,1,0)
     #number of patients
-    n1 = c(nrow(info[info$TRTP == levels(info$TRTP)[2],]))
-    n2 = c(nrow(info[info$TRTP == levels(info$TRTP)[1],]))
+    n1 = c(nrow(info[info$TRTP == 1,]))
+    n2 = c(nrow(info[info$TRTP == 0,]))
     n = n1+n2
     
     #Status    
@@ -1517,33 +1558,33 @@ server <- function(input,output){
     order <- c(1)
     #-event
     factor <- append(factor,"  Events observed")
-    T1 <-  append(T1,nrow(info[info$event == 1 & info$TRTP == levels(info$TRTP)[2],]))
-    T2 <- append(T2,nrow(info[info$event == 1 & info$TRTP == levels(info$TRTP)[1],]))
+    T1 <-  append(T1,nrow(info[info$event == 1 & info$TRTP == 1,]))
+    T2 <- append(T2,nrow(info[info$event == 1 & info$TRTP == 0,]))
     TT <- append(TT,nrow(info[info$event == 1,]))
     order <- append(order,2)
     for (i in unique(info[info$event == 1,]$EVNTDESC)) {
       factor <- append(factor,paste("    ",i,sep = " "))
-      T1 <- append(T1,nrow(info[info$TRTP == levels(info$TRTP)[2] & info$EVNTDESC == i,]))
-      T2 <- append(T2,nrow(info[info$TRTP == levels(info$TRTP)[1] & info$EVNTDESC == i,]))
+      T1 <- append(T1,nrow(info[info$TRTP == 1 & info$EVNTDESC == i,]))
+      T2 <- append(T2,nrow(info[info$TRTP == 0 & info$EVNTDESC == i,]))
       TT <- append(TT,nrow(info[info$EVNTDESC == i,]))
       order <- append(order,3)
     }
     #-censored
     factor <- append(factor,"  Censored")
-    T1 <-  append(T1,nrow(info[info$CNSR == 1 & info$TRTP == levels(info$TRTP)[2],]))
-    T2 <- append(T2,nrow(info[info$CNSR == 1 & info$TRTP == levels(info$TRTP)[1],]))
+    T1 <-  append(T1,nrow(info[info$CNSR == 1 & info$TRTP == 1,]))
+    T2 <- append(T2,nrow(info[info$CNSR == 1 & info$TRTP == 0,]))
     TT <- append(TT,nrow(info[info$CNSR == 1,]))
     order <- append(order,2)
     for (i in unique(info[info$CNSR == 1,]$EVNTDESC)) {
       factor <- append(factor,paste("    ",i,sep = " "))
-      T1 <- append(T1,nrow(info[info$TRTP == levels(info$TRTP)[2] & info$EVNTDESC == i,]))
-      T2 <- append(T2,nrow(info[info$TRTP == levels(info$TRTP)[1] & info$EVNTDESC == i,]))
+      T1 <- append(T1,nrow(info[info$TRTP == 1 & info$EVNTDESC == i,]))
+      T2 <- append(T2,nrow(info[info$TRTP == 0 & info$EVNTDESC == i,]))
       TT <- append(TT,nrow(info[info$EVNTDESC == i,]))
       order <- append(order,3)
     }
     
-    surv_fit <- survfit2(Surv(AVAL,event) ~ TRTP, data = info)
-    fit <- survfit2(Surv(AVAL,event) ~ 1, data = info)
+    surv_fit <- survival::survfit(Surv(AVAL,event) ~ TRTP, data = info,conf.type = "log-log")
+    fit <- survival::survfit(Surv(AVAL,event) ~ 1, data = info,conf.type = "log-log")
     #quantile
     q_tr <- quantile(surv_fit)
     q <- quantile(fit)
@@ -1611,10 +1652,10 @@ server <- function(input,output){
     
     #min-max
     factor <- append(factor,"Minimum, Maximum")
-    mint <- round(min(info[info$TRTP == levels(info$TRTP)[2],]$AVAL),3)
-    maxt <- round(max(info[info$TRTP == levels(info$TRTP)[2],]$AVAL),3)
-    minr <- round(min(info[info$TRTP == levels(info$TRTP)[1],]$AVAL),3)
-    maxr <- round(max(info[info$TRTP == levels(info$TRTP)[1],]$AVAL),3)
+    mint <- round(min(info[info$TRTP == 1,]$AVAL),3)
+    maxt <- round(max(info[info$TRTP == 1,]$AVAL),3)
+    minr <- round(min(info[info$TRTP == 0,]$AVAL),3)
+    maxr <- round(max(info[info$TRTP == 0,]$AVAL),3)
     min <- round(min(info$AVAL),3)
     max <- round(max(info$AVAL),3)
     T1 <-  append(T1,sprintf("%.3f, %.3f",
@@ -1639,13 +1680,19 @@ server <- function(input,output){
       TT <- append(TT," ")
       order <- append(order,2)
       factor <- append(factor,"  Estimate of hazard ratio")
-      T1 <-  append(T1,round(exp(coef(coxph(Surv(AVAL,event) ~ TRTP + strata(info[,idx]),data = info,ties = input$tie))),2))
+      info$trt <- as.numeric(as.character(info$TRTP))
+      fit = coxph(Surv(AVAL,event) ~ trt + strata(info[,idx]),data = info,ties = input$tie)
+      ci <- coxf(fit,input$liki,info)
+      T1 <-  append(T1,round(ci$coef,2))
+      #T1 <-  append(T1,round(exp(coef(coxph(Surv(AVAL,event) ~ TRTP + strata(info[,idx]),data = info,ties = input$tie))),2))
       T2 <- append(T2," ")
       TT <- append(TT," ")
       order <- append(order,2)
       factor <- append(factor,"  (95% CI)")
-      ciu <- c(round(exp(confint(coxph(Surv(AVAL,event) ~ TRTP + strata(info[,idx]),data = info,ties = input$tie)))[,2],3))
-      cil <- c(round(exp(confint(coxph(Surv(AVAL,event) ~ TRTP + strata(info[,idx]),data = info,ties = input$tie)))[,1],3))
+      ciu <- ci$upper
+      cil <- ci$lower
+      # ciu <- c(round(exp(confint(coxph(Surv(AVAL,event) ~ TRTP + strata(info[,idx]),data = info,ties = input$tie)))[,2],3))
+      # cil <- c(round(exp(confint(coxph(Surv(AVAL,event) ~ TRTP + strata(info[,idx]),data = info,ties = input$tie)))[,1],3))
       T1 <-  append(T1,sprintf("(%.3f, %.3f)",
                                cil,ciu))
       T2 <- append(T2," ")
@@ -1666,13 +1713,19 @@ server <- function(input,output){
     TT <- append(TT," ")
     order <- append(order,2)
     factor <- append(factor,"  Estimate of hazard ratio")
-    T1 <-  append(T1,round(exp(coef(coxph(Surv(AVAL,event) ~ TRTP,data = info,ties = input$tie))),2))
+    info$trt <- as.numeric(as.character(info$TRTP))
+    fit = coxph(Surv(AVAL,event) ~  trt ,data = info,ties = input$tie)
+    ci <- coxf(fit,input$liki,info)
+    T1 <-  append(T1,round(ci$coef,2))
+    # T1 <-  append(T1,round(exp(coef(coxph(Surv(AVAL,event) ~ TRTP,data = info,ties = input$tie))),2))
     T2 <- append(T2," ")
     TT <- append(TT," ")
     order <- append(order,2)
     factor <- append(factor,"  (95% CI)")
-    ciu <- c(round(exp(confint(coxph(Surv(AVAL,event) ~ TRTP,data = info,ties = input$tie)))[,2],3))
-    cil <- c(round(exp(confint(coxph(Surv(AVAL,event) ~ TRTP,data = info,ties = input$tie)))[,1],3))
+    ciu <- ci$upper
+    cil <- ci$lower
+    # ciu <- c(round(exp(confint(coxph(Surv(AVAL,event) ~ TRTP,data = info,ties = input$tie)))[,2],3))
+    # cil <- c(round(exp(confint(coxph(Surv(AVAL,event) ~ TRTP,data = info,ties = input$tie)))[,1],3))
     T1 <-  append(T1,sprintf("(%.3f, %.3f)",
                              cil,ciu))
     T2 <- append(T2," ")
@@ -1685,10 +1738,10 @@ server <- function(input,output){
         if(!is.null(input[[paste("p_",i)]]) && !is.na(input[[paste("p_",i)]])){
           surv_summary = summary(surv_fit,times = input[[paste("p_",i)]])
           fit_summary = summary(fit,times = input[[paste("p_",i)]])
-          factor <- append(factor,paste(input[[paste("p_",i)]],"Month Survival Rate"))
-          T1 <- append(T1,paste(round(surv_summary$surv[2],3)*100,"%"))
-          T2 <- append(T2,paste(round(surv_summary$surv[1],3)*100,"%"))
-          TT <- append(TT,paste(round(fit_summary$surv[1],3)*100,"%"))
+          factor <- append(factor,paste(input[[paste("p_",i)]],"Month Survival Rate(%)"))
+          T1 <- append(T1,round(surv_summary$surv[2],3)*100)
+          T2 <- append(T2,round(surv_summary$surv[1],3)*100)
+          TT <- append(TT,round(fit_summary$surv[1],3)*100)
           order <- append(order,1)
           factor <- append(factor,"  (95% CI)")
           uppert <- surv_summary$upper[2]*100
@@ -1697,11 +1750,11 @@ server <- function(input,output){
           lowerr <- surv_summary$lower[1]*100
           upper <- fit_summary$upper[1]*100
           lower <- fit_summary$lower[2]*100
-          T1 <- append(T1,sprintf("(%.1f%%, %.1f%%)",
+          T1 <- append(T1,sprintf("(%.2f, %.2f)",
                                   lowert,uppert))
-          T2 <- append(T2,sprintf("(%.1f%%, %.1f%%)",
+          T2 <- append(T2,sprintf("(%.2f, %.2f)",
                                   lowerr,upperr))
-          TT <- append(TT,sprintf("(%.1f%%, %.1f%%)",
+          TT <- append(TT,sprintf("(%.2f, %.2f)",
                                   lower,upper))
           order <- append(order,2)
         }
@@ -1714,7 +1767,6 @@ server <- function(input,output){
     data <- cbind(factor,T1,T2,TT,order)
     colnames(data) <- c("Factor",paste(input$lal," (N=",n1,")",sep = ""),paste(input$ral," (N=",n2,")",sep = ""),paste("Total (N=",n,")",sep = ""),"order")
     rownames(data) <- NULL
-    print(data)
     
     data <- as.data.frame(data)
     data
@@ -1753,6 +1805,131 @@ server <- function(input,output){
       write.xlsx(t,file,firstRow = T,colWidths = "auto")
     }
   )
+  
+  ##----------calculate the profile likelihood CI--------
+  profLik2=function (x, df, CI = 0.95,  
+                     percision=0.00005,  #add
+                     #remove                   interval = 1000,mult = c(0.1, 2), 
+                     devNew = TRUE, plot=FALSE,
+                     ...) 
+  {
+    if (!inherits(x, "coxph")) 
+      stop("Only applies to objects of class coxph")
+    coef1 <- stats::coef(x)
+    f1 <- paste0(deparse(x$formula), collapse = "")
+    f1 <- gsub("  ", "", f1)
+    
+    n1 <- names(stats::model.frame(x))[!grepl("Surv", names(stats::model.frame(x)))]
+    #remove  llik <- double(length = interval)
+    
+    ci_out=array(NA,dim=c(length(coef1),2)) #add
+    
+    se=summary(x)$coefficients[,"se(coef)"]  #add
+    
+    for (i in seq(length(coef1))) {
+      #remove    low1 <- mult[1] * coef1[i]  
+      #remove    up1 <- mult[2] * coef1[i]
+      
+      low1 <- coef1[i]-2.1*se[i] #add
+      up1 <- coef1[i]+2.1*se[i]  #add
+      
+      #remove    beta1 <- seq(from = low1, to = up1, length.out = interval)
+      
+      if(plot) beta1 <- seq(from = low1, to = up1, by=percision) else { #add
+        
+        low2=coef1[i]-1.9*se[i]
+        up2=coef1[i]+1.9*se[i]
+        
+        beta1 <- c(seq(from = low1, to = low2, by=percision),seq(from = up2, to = up1, by=percision))
+        
+      }
+      
+      
+      interval=length(beta1)  #add
+      llik <- double(length = interval) #add
+      
+      for (j in seq(interval)) {
+        rhs1 <- paste0(n1[-i], collapse = "+")
+        off1 <- beta1[j]
+        off2 <- paste0("+offset(", off1, "*", n1[i], ")")
+        rhs2 <- paste0(rhs1, off2)
+        f2 <- stats::as.formula(paste0(".~", rhs2))
+        c2 <- stats::update(x, formula = f2, data=df)
+        llik[j] <- c2$loglik[2]
+        if(length(coef1)==1) llik[j] <- c2$loglik #add 
+      }  #j
+      
+      est=data.frame(x=beta1,y=llik) #add
+      
+      if(plot) { #add if(plot)
+        
+        graphics::par(oma = c(0, 0, 4, 0)) # add if(plot)
+        if (i > 1 & devNew == TRUE) grDevices::dev.new()   
+        graphics::plot.default(beta1, llik, type = "l", xlab = "Values for coefficient", 
+                               ylab = "Model partial likelihood", main = n1[i], 
+                               ...)  
+        
+      }
+      
+      rCI <- stats::qchisq(CI, 1)
+      ci1 <- x$loglik[2] - rCI/2
+      if(plot) graphics::abline(h = ci1, lty = 2)
+      
+      #    head(est[order(abs(llik-ci1)),])
+      ci=est[order(abs(llik-ci1)),1][1:2]
+      ci_out[i,]=ci[order(ci)]
+      
+      sd1 <- sqrt(x$var[i, i])
+      CI2 <- (1 - CI)/2
+      rCI <- stats::qnorm(1 - CI2)
+      #remove    graphics::points(coef1[i] + c(-rCI, rCI) * sd1, c(ci1, ci1), pch = 1, cex = 3, ...) 
+      
+      if(plot) {  # add CI in title
+        
+        wald_lo=coef1[i]-rCI*sd1
+        wald_up=coef1[i]+rCI*sd1
+        
+        graphics::abline(v=coef1[i] + c(-rCI, rCI) * sd1, lty=2, ...)
+        
+        main1 <- paste0("Partial likelihood profiles and ", 100 * CI,
+                        "% CI cutoff (", format(round(ci_out[i,1], 4), nsmall = 4),", ",
+                        format(round(ci_out[i,2], 4), nsmall = 4),
+                        ") for model:\n", f1, " \n Verticle lines show ",
+                        100 * CI, "% CI limits for Wald interval (",
+                        format(round(wald_lo, 4), nsmall = 4),", ",
+                        format(round(wald_up, 4), nsmall = 4),")")
+        
+        graphics::mtext(main1, line = 0.3, outer = TRUE)
+      }
+      
+    } #i
+    
+    ci_out=cbind(coef1,ci_out) #add
+    ci_out=data.frame(ci_out) # add
+    names(ci_out)=c("Coef","Lower","Upper") #add
+    return(ci_out) # add
+    
+  }  
+  
+  ##----------calculate HR&CI--------
+  coxf <- function(fit,lik,df){
+    ci <- data.frame()
+    if(lik == "wald"){
+      coef <- exp(coef(fit))
+      upper <- exp(confint(fit)[,2])
+      lower <- exp(confint(fit)[,1])
+      ci <- as.data.frame(cbind(coef,upper,lower))
+      
+    }else{
+      ci_pl = profLik2(fit,df,percision=0.00005,plot=F)
+      coef <- exp(ci_pl$Coef)
+      upper <- exp(ci_pl$Upper)
+      lower <- exp(ci_pl$Lower)
+      ci <- as.data.frame(cbind(coef,upper,lower))
+    }
+    return(ci)
+  }
+  
   ##============Forest Plot================== 
   df <- reactive({
     options(scipen = 999)
@@ -1764,10 +1941,13 @@ server <- function(input,output){
     info$status <- -info$CNSR + 1
     if(input$trgr %in% names(info)){
       info$TRTP <- info[[input$trgr]]
-      info$TRTP <- factor(info$TRTP)
-      if(length(levels(info$TRTP))>1){
+      # info$TRTP <- factor(info$TRTP)
+      req(input$ref %in% unique(info$TRTP))
+      if(length(unique(info$TRTP))>1){
         if(length(input$ref) > 0){
-          info$TRTP <- relevel(info$TRTP,input$ref)
+          #    info$TRTP <- relevel(info$TRTP,input$ref)
+          info$TRTP <- ifelse(info$TRTP == input$ref,0,1)
+          info$trt <- as.numeric(as.character(info$TRTP))
         }
       }
       else
@@ -1779,17 +1959,14 @@ server <- function(input,output){
       return(NULL)
     
     
-    
-    
-    
     a <- c("Overall")
     b <- c(nrow(info))
-    n1t <- c(nrow(info[info$TRTP == levels(info$TRTP)[2],]))
-    n2t <- c(nrow(info[info$TRTP == levels(info$TRTP)[1],]))
-    b1t <- c(nrow(info[info$status == 1 & info$TRTP == levels(info$TRTP)[2],]))
-    b2t <- c(nrow(info[info$status == 1 & info$TRTP == levels(info$TRTP)[1],]))
+    n1t <- c(nrow(info[info$TRTP == 1,]))
+    n2t <- c(nrow(info[info$TRTP == 0,]))
+    b1t <- c(nrow(info[info$status == 1 & info$TRTP == 1,]))
+    b2t <- c(nrow(info[info$status == 1 & info$TRTP == 0,]))
     c <- c(paste(rep(" ",40),collapse = " "))
-    surv_fit <- survfit2(Surv(AVAL,status) ~ TRTP, data = info)
+    surv_fit <- survival::survfit(Surv(AVAL,status) ~ TRTP, data = info,conf.type = "log-log")
     med_surv <- surv_median(surv_fit)
     mtg <- c(med_surv$median[2])
     mrg <- c(med_surv$median[1])
@@ -1800,14 +1977,30 @@ server <- function(input,output){
     if(input$saf == T){
       req(input$savar)
       savar = which(colnames(info) %in% input$savar)
-      hr <- c(round(exp(coef(coxph(Surv(AVAL,status) ~ TRTP + strata(info[,savar]),data = info,ties = input$tie))),2))
-      ciu <- c(round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP + strata(info[,savar]),data = info,ties = input$tie)))[,2],3))
-      cil <- c(round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP + strata(info[,savar]),data = info,ties = input$tie)))[,1],3))
+      info$stra <- info[[input$savar]]
+      fit = coxph(Surv(AVAL,status) ~  trt+ strata(stra) ,data = info,ties = input$tie)
+      # ci_pl = profLik2(fit,info,percision=0.00005,plot=F)
+      ci <- coxf(fit,input$liki,info)
+      hr <- c(ci$coef)
+      ciu <- c(ci$upper)
+      cil <- c(ci$lower)
+      # hr <- c(exp(ci_pl$Coef))
+      # ciu <- c(exp(ci_pl$Upper))
+      # cil <- c(exp(ci_pl$Lower))
+      # hr <- c(round(exp(coef(coxph(Surv(AVAL,status) ~ TRTP + strata(info[,savar]),data = info,ties = input$tie))),2))
+      # ciu <- c(round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP + strata(info[,savar]),data = info,ties = input$tie)))[,2],3))
+      # cil <- c(round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP + strata(info[,savar]),data = info,ties = input$tie)))[,1],3))
       p_v <- c(ifelse(survdiff(Surv(AVAL,status) ~ TRTP + strata(info[,savar]), data = info)$pvalue < 0.0001,"<0.0001",format(round(survdiff(Surv(AVAL,status) ~ TRTP + strata(info[,savar]), data = info)$pvalue,4),nsmall = 4)))
     }else{
-      hr <- c(round(exp(coef(coxph(Surv(AVAL,status) ~ TRTP,data = info,ties = input$tie))),2))
-      ciu <- c(round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP,data = info,ties = input$tie)))[,2],3))
-      cil <- c(round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP,data = info,ties = input$tie)))[,1],3))
+      fit = coxph(Surv(AVAL,status) ~  trt ,data = info,ties = input$tie)
+      ci <- coxf(fit,input$liki,info)
+      print(class(ci))
+      hr <- c(ci$coef)
+      ciu <- c(ci$upper)
+      cil <- c(ci$lower)
+      # hr <- c(round(exp(coef(coxph(Surv(AVAL,status) ~ TRTP,data = info,ties = input$tie))),2))
+      # ciu <- c(round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP,data = info,ties = input$tie)))[,2],3))
+      # cil <- c(round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP,data = info,ties = input$tie)))[,1],3))
       p_v <- c(ifelse(survdiff(Surv(AVAL,status) ~ TRTP, data = info)$pvalue < 0.0001,"<0.0001",format(round(survdiff(Surv(AVAL,status) ~ TRTP, data = info)$pvalue,4),nsmall = 4)))
       
     }
@@ -1837,7 +2030,7 @@ server <- function(input,output){
         cil <- append(cil,"")
         p_v <- append(p_v,"")
         info1 <- info[info[[i]] %in% as.vector(var[var$subgroup == i,]$level),]
-        p_v_i <- append(p_v_i,ifelse(summary(coxph(Surv(AVAL,status) ~ TRTP + info1[[i]] + TRTP*info1[[i]],data = info1))$coefficients[3,5] < 0.0001,"<0.0001",format(round(summary(coxph(Surv(AVAL,status) ~ TRTP + info1[[i]] + TRTP*info1[[i]],data = info1))$coefficients[3,5],4),nsmall = 4)))
+        p_v_i <- append(p_v_i,ifelse(summary(coxph(Surv(AVAL,status) ~ TRTP + info1[[i]] + TRTP*info1[[i]],data = info1,ties = input$tie))$coefficients[3,5] < 0.0001,"<0.0001",format(round(summary(coxph(Surv(AVAL,status) ~ TRTP + info1[[i]] + TRTP*info1[[i]],data = info1,ties = input$tie))$coefficients[3,5],4),nsmall = 4)))
         a1 <- append(a1,var[var$subgroup == i,]$subgroup_edit[1])
         a2 <- append(a2,"subgroup")
         for(k in var[var$subgroup == i,]$level){
@@ -1847,12 +2040,12 @@ server <- function(input,output){
           }
           a <- append(a,var[var$level == k & var$subgroup == i,]$level_edit)
           b <- append(b,sum(info[i] == k))
-          n1t <- append(n1t,nrow(info[info$TRTP == levels(info$TRTP)[2] & info[[i]] == k,]))
-          n2t <- append(n2t,nrow(info[info$TRTP == levels(info$TRTP)[1] & info[[i]] == k,]))
-          b1t <- append(b1t,nrow(info[info$status == 1 & info$TRTP == levels(info$TRTP)[2] & info[[i]] == k,]))
-          b2t <- append(b2t,nrow(info[info$status == 1 & info$TRTP == levels(info$TRTP)[1] & info[[i]] == k,]))
+          n1t <- append(n1t,nrow(info[info$TRTP == 1 & info[[i]] == k,]))
+          n2t <- append(n2t,nrow(info[info$TRTP == 0 & info[[i]] == k,]))
+          b1t <- append(b1t,nrow(info[info$status == 1 & info$TRTP == 1 & info[[i]] == k,]))
+          b2t <- append(b2t,nrow(info[info$status == 1 & info$TRTP == 0 & info[[i]] == k,]))
           c <- append(c,paste(rep(" ",40),collapse = " "))
-          surv_fit <- survfit2(Surv(AVAL,status) ~ TRTP, data = info[info[[i]] == k,])
+          surv_fit <- survival::survfit(Surv(AVAL,status) ~ TRTP, data = info[info[[i]] == k,],conf.type = "log-log")
           med_surv <- surv_median(surv_fit)
           mtg <- append(mtg,med_surv$median[2])
           mrg <- append(mrg,med_surv$median[1])
@@ -1860,9 +2053,15 @@ server <- function(input,output){
           mtuci <- append(mtuci,med_surv$upper[2])
           mrlci <- append(mrlci,med_surv$lower[1])
           mruci <- append(mruci,med_surv$upper[1])
-          hr <- append(hr,round(exp(coef((coxph(Surv(AVAL,status)~TRTP,data = info[info[[i]] == k,],ties = input$tie)))),3))
-          ciu <- append(ciu,round(exp(confint((coxph(Surv(AVAL,status) ~ TRTP,data = info[info[[i]] == k,],ties = input$tie)))[,2]),3))
-          cil <- append(cil,round(exp(confint((coxph(Surv(AVAL,status) ~ TRTP,data = info[info[[i]] == k,],ties = input$tie)))[,1]),3))
+          fit = coxph(Surv(AVAL,status) ~  trt,data = info[info[[i]] == k,],ties = input$tie)
+          ci <- coxf(fit,input$liki,info[info[[i]] == k,])
+          print(1)
+          hr <- append(hr,ci$coef)
+          ciu <- append(ciu,ci$upper)
+          cil <- append(cil,ci$lower)
+          # hr <- append(hr,round(exp(coef((coxph(Surv(AVAL,status)~TRTP,data = info[info[[i]] == k,],ties = input$tie)))),6))
+          # ciu <- append(ciu,round(exp(confint((coxph(Surv(AVAL,status) ~ TRTP,data = info[info[[i]] == k,],ties = input$tie)))[,2]),3))
+          # cil <- append(cil,round(exp(confint((coxph(Surv(AVAL,status) ~ TRTP,data = info[info[[i]] == k,],ties = input$tie)))[,1]),3))
           p_v <- append(p_v,ifelse(survdiff(Surv(AVAL,status) ~ TRTP, data = info[info[[i]] == k,])$pvalue < 0.0001,"<0.0001",format(round(survdiff(Surv(AVAL,status) ~ TRTP, data = info[info[[i]] == k,])$pvalue,4),nsmall = 4)))
           p_v_i <- append(p_v_i,"")
           a1 <- append(a1,paste(var[var$subgroup == i,]$subgroup_edit[1],"_",var[var$level == k & var$subgroup == i,]$level_edit))
@@ -1873,6 +2072,7 @@ server <- function(input,output){
     }
     else{
       for(i in input$selected){
+        req(input[[paste("cta_",i)]])
         idx = which(var == i)
         a <- append(a,lab[[idx]])
         
@@ -1892,24 +2092,24 @@ server <- function(input,output){
         ciu <- append(ciu,"")
         cil <- append(cil,"")
         p_v <- append(p_v,"")
-        req(input[[paste("cta_",i)]])
+        
         if(length(input[[paste("cta_",i)]])>1){
           info1 <- info[info[[i]] %in% as.vector(input[[paste("cta_",i)]]),]
         }else{
           info1 <- info
         }
-        p_v_i <- append(p_v_i,ifelse(summary(coxph(Surv(AVAL,status) ~ TRTP + info1[[i]] + TRTP*info1[[i]],data = info1))$coefficients[3,5] < 0.0001,"<0.0001",format(round(summary(coxph(Surv(AVAL,status) ~ TRTP + info1[[i]] + TRTP*info1[[i]],data = info1))$coefficients[3,5],4),nsmall = 4)))
+        p_v_i <- append(p_v_i,ifelse(summary(coxph(Surv(AVAL,status) ~ TRTP + info1[[i]] + TRTP*info1[[i]],data = info1,ties = input$tie))$coefficients[3,5] < 0.0001,"<0.0001",format(round(summary(coxph(Surv(AVAL,status) ~ TRTP + info1[[i]] + TRTP*info1[[i]],data = info1,ties = input$tie))$coefficients[3,5],4),nsmall = 4)))
         a1 <- append(a1,lab[[idx]])
         a2 <- append(a2,"subgroup")
         for(k in input[[paste("cta_",i)]]){
           a <- append(a,k)
           b <- append(b,sum(info[i] == k))
-          n1t <- append(n1t,nrow(info[info$TRTP == levels(info$TRTP)[2] & info[[i]] == k,]))
-          n2t <- append(n2t,nrow(info[info$TRTP == levels(info$TRTP)[1] & info[[i]] == k,]))
-          b1t <- append(b1t,nrow(info[info$status == 1 & info$TRTP == levels(info$TRTP)[2] & info[[i]] == k,]))
-          b2t <- append(b2t,nrow(info[info$status == 1 & info$TRTP == levels(info$TRTP)[1] & info[[i]] == k,]))
+          n1t <- append(n1t,nrow(info[info$TRTP == 1 & info[[i]] == k,]))
+          n2t <- append(n2t,nrow(info[info$TRTP == 0 & info[[i]] == k,]))
+          b1t <- append(b1t,nrow(info[info$status == 1 & info$TRTP == 1 & info[[i]] == k,]))
+          b2t <- append(b2t,nrow(info[info$status == 1 & info$TRTP == 0 & info[[i]] == k,]))
           c <- append(c,paste(rep(" ",40),collapse = " "))
-          surv_fit <- survfit2(Surv(AVAL,status) ~ TRTP, data = info[info[[i]] == k,])
+          surv_fit <- survival::survfit(Surv(AVAL,status) ~ TRTP, data = info[info[[i]] == k,],conf.type = "log-log")
           med_surv <- surv_median(surv_fit)
           mtg <- append(mtg,med_surv$median[2])
           mrg <- append(mrg,med_surv$median[1])
@@ -1917,9 +2117,15 @@ server <- function(input,output){
           mtuci <- append(mtuci,med_surv$upper[2])
           mrlci <- append(mrlci,med_surv$lower[1])
           mruci <- append(mruci,med_surv$upper[1])
-          hr <- append(hr,round(exp(coef(coxph(Surv(AVAL,status)~TRTP,data = info[info[[i]] == k,],ties = input$tie))),4))
-          ciu <- append(ciu,round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP,data = info[info[[i]] == k,],ties = input$tie))[,2]),3))
-          cil <- append(cil,round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP,data = info[info[[i]] == k,],ties = input$tie))[,1]),3))
+          fit = coxph(Surv(AVAL,status) ~  trt,data = info[info[[i]] == k,],ties = input$tie)
+          ci <- coxf(fit,input$liki,info[info[[i]] == k,])
+          print(2)
+          hr <- append(hr,ci$coef)
+          ciu <- append(ciu,ci$upper)
+          cil <- append(cil,ci$lower)
+          # hr <- append(hr,round(exp(coef(coxph(Surv(AVAL,status)~TRTP,data = info[info[[i]] == k,],ties = input$tie))),6))
+          # ciu <- append(ciu,round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP,data = info[info[[i]] == k,],ties = input$tie))[,2]),3))
+          # cil <- append(cil,round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP,data = info[info[[i]] == k,],ties = input$tie))[,1]),3))
           p_v <- append(p_v,ifelse(survdiff(Surv(AVAL,status) ~ TRTP, data = info[info[[i]] == k,])$pvalue < 0.0001,"<0.0001",format(round(survdiff(Surv(AVAL,status) ~ TRTP, data = info[info[[i]] == k,])$pvalue,4),nsmall = 4)))
           p_v_i <- append(p_v_i,"")
           a1 <- append(a1,lab[[idx]])
@@ -1927,7 +2133,6 @@ server <- function(input,output){
         }
       }
     }
-    
     
     data <- data.frame(Subgroup = a, "No. of Patient" = b, "Treatment_Event" = as.numeric(b1t), "Reference_Event" = as.numeric(b2t), "Treat_N" = as.numeric(n1t),
                        "Refer_N" = as.numeric(n2t)," " = c, mtg = round(as.numeric(mtg),1), mrg = round(as.numeric(mrg),1),
@@ -2026,7 +2231,6 @@ server <- function(input,output){
     info <- cha_df()
     sub <- info$Subgroup[info$Type == "subgroup"]
     lel <- info$Subgroup[info$Type == "level"]
-    print(sub)
     subgroup <- c()
     level <- c()
     subgroup_edit <- c()
@@ -2133,10 +2337,10 @@ server <- function(input,output){
     req(input$FRtable)
     file <- input$FRtable
     df <- read.csv(file$datapath,sep = ",",header = TRUE,check.names = F,stringsAsFactors = F)
-    df[,1] <- ifelse(df[,ncol(df)]=="level",paste(paste(rep(" ",input$nbk),collapse = ""),df[,1]),df[,1])
+    df[,1] <- ifelse(df[,ncol(df)-1]=="level",paste(paste(rep(" ",input$nbk),collapse = ""),df[,1]),df[,1])
     df[,2] <- ifelse(is.na(df[,2]),"",df[,2])
-    df[,16] <- ifelse(is.na(df[,16]),"",df[,16])
-    df[,17] <- ifelse(is.na(df[,17]),"",df[,17])
+    df[,16] <- ifelse(is.na(df[,16]),"",sprintf("%.4f", df[,16]))
+    df[,17] <- ifelse(is.na(df[,17]),"",sprintf("%.4f", df[,17]))
     df$"HR (95% CI)" = ifelse(is.na(df$HR),"",sprintf("%.2f (%.3f, %.3f)",
                                                       df$HR,df$lower,df$upper))
     df$"TreatmentGroup Median" = ifelse(is.na(df$HR),"",sprintf("%.1f (%.1f, %.1f)",
@@ -2181,7 +2385,6 @@ server <- function(input,output){
           col <- append(col,18)
         }
         val = colnames(df[,col])
-        print(val)
         rank_list(
           labels = val,
           input_id = "fr_col")
@@ -2207,13 +2410,12 @@ server <- function(input,output){
         col <- append(col,17)
       }
       val = colnames(df[,col])
-      print(val)
       rank_list(
         labels = val,
         input_id = "fr_col")
     }
   })
-##-----------draw forest polt----------------  
+  ##-----------draw forest polt----------------  
   frp <- reactive({
     tm <- forest_theme(base_size = input$frf,
                        base_family = "serif",
@@ -2227,7 +2429,11 @@ server <- function(input,output){
                        core=list(fg_params = list(vjust = 0.5),
                                  bg_params = list(fill = c("lightgrey","white"))))
     
-    
+    if(input$scale == "log"){
+      ticks = c(0.0625,0.125,0.25,0.5,1,2,4,8)
+    }else{
+      ticks = c(0,0.5,1,1.5,2)
+    }
     if(!is.null(input$FRfile0)){
       if(!is.null(cha_df())){
         df <- cha_df()
@@ -2243,8 +2449,8 @@ server <- function(input,output){
         
         ntcol = 2
         nrcol = 3
-
-
+        
+        
         df$Subgroup[df$Type == "level"] = paste(paste(rep(" ",input$nbk),collapse = ""),df$Subgroup[df$Type == "level"])
         req(input$leed)
         req(input$ried)
@@ -2273,13 +2479,13 @@ server <- function(input,output){
                     ref_line = 1,
                     arrow_lab = c(paste(input$lal,"Better"),paste(input$ral,"Better")),
                     xlim = c(input$leed,input$ried),
-                    x_trans = "log",
-                    ticks_at = c(0.0625,0.125,0.25,0.5,1,2,4,8),
+                    x_trans = input$scale,
+                    ticks_at = ticks,
                     theme = tm
         )
         g <- edit_plot(g,col = c(2:length(col)),which = "text",hjust=unit(0.5,"npc"),x=unit(0.5,"npc"))
         
-
+        
         if(input$med == T){
           req(length(mtcol) != 0)
           req(length(mrcol) != 0)
@@ -2331,7 +2537,6 @@ server <- function(input,output){
         re <- 2
       }
       if(!is.na(input$leed)){
-        print(input$leed)
         le <- input$leed
       }
       if(!is.na(input$ried)){
@@ -2353,7 +2558,6 @@ server <- function(input,output){
       
       if(!is.null(input$fr_col)){
         val = as.vector(input$fr_col)
-        print(val)
         b = which(val == "")
         val[b] <- " "
         col = c()
@@ -2375,19 +2579,19 @@ server <- function(input,output){
                   ref_line = 1,
                   arrow_lab = c(paste(input$lal,"Better"),paste(input$ral,"Better")),
                   xlim = c(le,re),
-                  x_trans = "log",
-                  ticks_at = c(0.0625,0.125,0.25,0.5,1,2,4,8),
+                  x_trans = input$scale,
+                  ticks_at = ticks,
                   theme = tm)
       g <- edit_plot(g,col = c(2:length(col)),which = "text",hjust=unit(0.5,"npc"),x=unit(0.5,"npc"))
       
       
-
+      
       if(input$med == T){
         req(length(mtcol) != 0)
         req(length(mrcol) != 0)
         g <- insert_text(g,text = "Median (95% CI) (Months)",col = mtcol:mrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
       }
-
+      
       if(input$pool == F){
         req(length(ntcol) != 0)
         req(length(nrcol) != 0)
@@ -2397,11 +2601,9 @@ server <- function(input,output){
           g <- insert_text(g,text = "Number of events/N",col = ntcol:nrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
         }
       }
-      print(unique(df$Parameter))
       if(length(unique(df$Parameter))>1){
         n = 1
         s = table(df$Parameter)
-        print(s)
         for(i in unique(df$Parameter)){
           g <- insert_text(g,
                            text = "",
@@ -2422,7 +2624,7 @@ server <- function(input,output){
                          row = nrow(df)+2*length(unique(df$Parameter))+1,
                          part = "body",
                          gp = gpar(fontsize = 2))
-
+        
       }else{
         g <- insert_text(g,
                          text = "",
@@ -2430,7 +2632,7 @@ server <- function(input,output){
                          part = "body",
                          gp = gpar(fontsize = 2))        
       }
-
+      
       g
     }
     else{
@@ -2462,15 +2664,15 @@ server <- function(input,output){
         p_sc <- get_scale(plot = frp(),width_wanted = 13,height_wanted = 8,unit = "in")
         wh <- get_wh(frp(),unit = "in")
         ggsave(file,plot = frp(),device = input$frdltype,width = wh[1],height= wh[2],units = "in")
-
+        
       }
       
     }
   )
   
- 
   
-
+  
+  
   
 }
 
