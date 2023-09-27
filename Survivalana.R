@@ -27,6 +27,7 @@ library(gridExtra)
 library(patchwork)
 library(gtable)
 library(reactable)
+library(export)
 
 ui <- dashboardPage(
   
@@ -324,6 +325,11 @@ ui <- dashboardPage(
                      ),
                      tabPanel("Label",
                               fluidRow(
+                                column(6,
+                                       textInput("lal","Treatment Group label",value = "Treatment Group")
+                                ),
+                                column(6,
+                                       textInput("ral","Reference Group label",value = "Reference Group")),
                                 column(12,
                                        uiOutput("ch")
                                 ),
@@ -340,11 +346,7 @@ ui <- dashboardPage(
                                                     inline = T
                                        )
                                 ),
-                                column(6,
-                                       textInput("lal","Treatment Group label",value = "Treatment Group")
-                                ),
-                                column(6,
-                                       textInput("ral","Reference Group label",value = "Reference Group")),
+                                
                                 column(6,
                                        checkboxInput("hr",tags$b("Show Hazard Ratio(95% CI)"),value = T),
                                        checkboxInput("med",tags$b("Show median information"),value = T),
@@ -1444,6 +1446,11 @@ server <- function(input,output){
     if(input$tgp == T){
       data <- all_info()
       labelsl = data %>% map(attr_getter("label"))
+      for (i in names(labelsl)) {
+        if(is.null(labelsl[[i]])){
+          labelsl[[i]] <- i
+        }
+      }
       selectInput("tgpvar","Select the filtration variable",choices = setNames(colnames(data),labelsl))
     }else{
       return(NULL)
@@ -1467,6 +1474,11 @@ server <- function(input,output){
     if(input$etr == T){
       data <- all_info()
       labelsl = data %>% map(attr_getter("label"))
+      for (i in names(labelsl)) {
+        if(is.null(labelsl[[i]])){
+          labelsl[[i]] <- i
+        }
+      }
       selectInput("extrainfo", NULL, choices = setNames(names(data),labelsl))
     }else{
       return(NULL)
@@ -1682,7 +1694,7 @@ server <- function(input,output){
       factor <- append(factor,"  Estimate of hazard ratio")
       info$trt <- as.numeric(as.character(info$TRTP))
       fit = coxph(Surv(AVAL,event) ~ trt + strata(info[,idx]),data = info,ties = input$tie)
-      ci <- coxf(fit,input$liki,info)
+      ci <- coxf(fit,input$tie,input$liki,info,"Overall",T)
       T1 <-  append(T1,round(ci$coef,2))
       #T1 <-  append(T1,round(exp(coef(coxph(Surv(AVAL,event) ~ TRTP + strata(info[,idx]),data = info,ties = input$tie))),2))
       T2 <- append(T2," ")
@@ -1715,7 +1727,7 @@ server <- function(input,output){
     factor <- append(factor,"  Estimate of hazard ratio")
     info$trt <- as.numeric(as.character(info$TRTP))
     fit = coxph(Surv(AVAL,event) ~  trt ,data = info,ties = input$tie)
-    ci <- coxf(fit,input$liki,info)
+    ci <- coxf(fit,input$tie,input$liki,info,"Overall",F)
     T1 <-  append(T1,round(ci$coef,2))
     # T1 <-  append(T1,round(exp(coef(coxph(Surv(AVAL,event) ~ TRTP,data = info,ties = input$tie))),2))
     T2 <- append(T2," ")
@@ -1807,124 +1819,44 @@ server <- function(input,output){
   )
   
   ##----------calculate the profile likelihood CI--------
-  profLik2=function (x, df, CI = 0.95,  
-                     percision=0.00005,  #add
-                     #remove                   interval = 1000,mult = c(0.1, 2), 
-                     devNew = TRUE, plot=FALSE,
-                     ...) 
-  {
-    if (!inherits(x, "coxph")) 
-      stop("Only applies to objects of class coxph")
-    coef1 <- stats::coef(x)
-    f1 <- paste0(deparse(x$formula), collapse = "")
-    f1 <- gsub("  ", "", f1)
+  profLik2 <- function(xx,fit,tie,df,saf) {
+    if(saf == T){
+      req(input$savar)
+      savar = which(colnames(df) %in% input$savar)
+      info$stra <- info[[input$savar]]
+      tfit <- coxph(Surv(AVAL, status) ~ trt + strata(stra),tie=tie,data = df,
+                    init = xx, iter=0)
+    }else{
+      tfit <- coxph(Surv(AVAL, status) ~ trt,tie=tie,data = df,
+                    init = xx, iter=0)
+    }
+    (fit$loglik - tfit$loglik)[2] - qchisq(.95, 1)/2
     
-    n1 <- names(stats::model.frame(x))[!grepl("Surv", names(stats::model.frame(x)))]
-    #remove  llik <- double(length = interval)
-    
-    ci_out=array(NA,dim=c(length(coef1),2)) #add
-    
-    se=summary(x)$coefficients[,"se(coef)"]  #add
-    
-    for (i in seq(length(coef1))) {
-      #remove    low1 <- mult[1] * coef1[i]  
-      #remove    up1 <- mult[2] * coef1[i]
-      
-      low1 <- coef1[i]-2.1*se[i] #add
-      up1 <- coef1[i]+2.1*se[i]  #add
-      
-      #remove    beta1 <- seq(from = low1, to = up1, length.out = interval)
-      
-      if(plot) beta1 <- seq(from = low1, to = up1, by=percision) else { #add
-        
-        low2=coef1[i]-1.9*se[i]
-        up2=coef1[i]+1.9*se[i]
-        
-        beta1 <- c(seq(from = low1, to = low2, by=percision),seq(from = up2, to = up1, by=percision))
-        
-      }
-      
-      
-      interval=length(beta1)  #add
-      llik <- double(length = interval) #add
-      
-      for (j in seq(interval)) {
-        rhs1 <- paste0(n1[-i], collapse = "+")
-        off1 <- beta1[j]
-        off2 <- paste0("+offset(", off1, "*", n1[i], ")")
-        rhs2 <- paste0(rhs1, off2)
-        f2 <- stats::as.formula(paste0(".~", rhs2))
-        c2 <- stats::update(x, formula = f2, data=df)
-        llik[j] <- c2$loglik[2]
-        if(length(coef1)==1) llik[j] <- c2$loglik #add 
-      }  #j
-      
-      est=data.frame(x=beta1,y=llik) #add
-      
-      if(plot) { #add if(plot)
-        
-        graphics::par(oma = c(0, 0, 4, 0)) # add if(plot)
-        if (i > 1 & devNew == TRUE) grDevices::dev.new()   
-        graphics::plot.default(beta1, llik, type = "l", xlab = "Values for coefficient", 
-                               ylab = "Model partial likelihood", main = n1[i], 
-                               ...)  
-        
-      }
-      
-      rCI <- stats::qchisq(CI, 1)
-      ci1 <- x$loglik[2] - rCI/2
-      if(plot) graphics::abline(h = ci1, lty = 2)
-      
-      #    head(est[order(abs(llik-ci1)),])
-      ci=est[order(abs(llik-ci1)),1][1:2]
-      ci_out[i,]=ci[order(ci)]
-      
-      sd1 <- sqrt(x$var[i, i])
-      CI2 <- (1 - CI)/2
-      rCI <- stats::qnorm(1 - CI2)
-      #remove    graphics::points(coef1[i] + c(-rCI, rCI) * sd1, c(ci1, ci1), pch = 1, cex = 3, ...) 
-      
-      if(plot) {  # add CI in title
-        
-        wald_lo=coef1[i]-rCI*sd1
-        wald_up=coef1[i]+rCI*sd1
-        
-        graphics::abline(v=coef1[i] + c(-rCI, rCI) * sd1, lty=2, ...)
-        
-        main1 <- paste0("Partial likelihood profiles and ", 100 * CI,
-                        "% CI cutoff (", format(round(ci_out[i,1], 4), nsmall = 4),", ",
-                        format(round(ci_out[i,2], 4), nsmall = 4),
-                        ") for model:\n", f1, " \n Verticle lines show ",
-                        100 * CI, "% CI limits for Wald interval (",
-                        format(round(wald_lo, 4), nsmall = 4),", ",
-                        format(round(wald_up, 4), nsmall = 4),")")
-        
-        graphics::mtext(main1, line = 0.3, outer = TRUE)
-      }
-      
-    } #i
-    
-    ci_out=cbind(coef1,ci_out) #add
-    ci_out=data.frame(ci_out) # add
-    names(ci_out)=c("Coef","Lower","Upper") #add
-    return(ci_out) # add
-    
-  }  
+  }
+  
   
   ##----------calculate HR&CI--------
-  coxf <- function(fit,lik,df){
+  coxf <- function(fit,tie,lik,df,tp,saf){
     ci <- data.frame()
     if(lik == "wald"){
-      coef <- exp(coef(fit))
-      upper <- exp(confint(fit)[,2])
-      lower <- exp(confint(fit)[,1])
+      coef <- ifelse(exp(coef(fit)) == 0,NA,exp(coef(fit)))
+      upper <- ifelse(exp(confint(fit)[,1]) == 0,NA,exp(confint(fit)[,2]))
+      lower <- ifelse(exp(confint(fit)[,1]) == 0,NA,exp(confint(fit)[,1]))
+      # upper <- ifelse(exp(confint(fit)[,2]) == Inf,99999,exp(confint(fit)[,2]))
+      # lower <- ifelse(exp(confint(fit)[,1]) == 0,0.00001,exp(confint(fit)[,1]))
       ci <- as.data.frame(cbind(coef,upper,lower))
       
     }else{
-      ci_pl = profLik2(fit,df,percision=0.00005,plot=F)
-      coef <- exp(ci_pl$Coef)
-      upper <- exp(ci_pl$Upper)
-      lower <- exp(ci_pl$Lower)
+      showNotification(paste("Still working on",tp,"Profile Likelihood based Confidence Interval"),
+                       type = "warning")
+      
+      est=coef(fit)
+      coef = exp(est)
+      se=summary(fit)$coefficients[3]
+      lower=exp(uniroot(f=profLik2, c(est-3*se, est-se),fit = fit,tie=tie,df = df,saf = saf)$root)
+      print(lower)
+      upper=exp(uniroot(f=profLik2, c(est+se, est+3*se),fit = fit,tie=tie,df = df,saf = saf)$root)
+      
       ci <- as.data.frame(cbind(coef,upper,lower))
     }
     return(ci)
@@ -1978,9 +1910,9 @@ server <- function(input,output){
       req(input$savar)
       savar = which(colnames(info) %in% input$savar)
       info$stra <- info[[input$savar]]
-      fit = coxph(Surv(AVAL,status) ~  trt+ strata(stra) ,data = info,ties = input$tie)
+      fit = coxph(Surv(AVAL,status) ~  trt+ strata(stra),data = info,ties = input$tie)
       # ci_pl = profLik2(fit,info,percision=0.00005,plot=F)
-      ci <- coxf(fit,input$liki,info)
+      ci <- coxf(fit,input$tie,input$liki,info,"Overall",T)
       hr <- c(ci$coef)
       ciu <- c(ci$upper)
       cil <- c(ci$lower)
@@ -1990,18 +1922,18 @@ server <- function(input,output){
       # hr <- c(round(exp(coef(coxph(Surv(AVAL,status) ~ TRTP + strata(info[,savar]),data = info,ties = input$tie))),2))
       # ciu <- c(round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP + strata(info[,savar]),data = info,ties = input$tie)))[,2],3))
       # cil <- c(round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP + strata(info[,savar]),data = info,ties = input$tie)))[,1],3))
-      p_v <- c(ifelse(survdiff(Surv(AVAL,status) ~ TRTP + strata(info[,savar]), data = info)$pvalue < 0.0001,"<0.0001",format(round(survdiff(Surv(AVAL,status) ~ TRTP + strata(info[,savar]), data = info)$pvalue,4),nsmall = 4)))
+      p_v <- c(ifelse(survdiff(Surv(AVAL,status) ~ TRTP + strata(info[,savar]), data = info)$pvalue < 0.00001,"<0.00001",format(round(survdiff(Surv(AVAL,status) ~ TRTP + strata(info[,savar]), data = info)$pvalue,4),nsmall = 4)))
     }else{
       fit = coxph(Surv(AVAL,status) ~  trt ,data = info,ties = input$tie)
-      ci <- coxf(fit,input$liki,info)
-      print(class(ci))
+      ci <- coxf(fit,input$tie,input$liki,info,"Overall",F)
+      print(ci)
       hr <- c(ci$coef)
       ciu <- c(ci$upper)
       cil <- c(ci$lower)
       # hr <- c(round(exp(coef(coxph(Surv(AVAL,status) ~ TRTP,data = info,ties = input$tie))),2))
       # ciu <- c(round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP,data = info,ties = input$tie)))[,2],3))
       # cil <- c(round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP,data = info,ties = input$tie)))[,1],3))
-      p_v <- c(ifelse(survdiff(Surv(AVAL,status) ~ TRTP, data = info)$pvalue < 0.0001,"<0.0001",format(round(survdiff(Surv(AVAL,status) ~ TRTP, data = info)$pvalue,4),nsmall = 4)))
+      p_v <- c(ifelse(survdiff(Surv(AVAL,status) ~ TRTP, data = info)$pvalue < 0.00001,"<0.00001",format(round(survdiff(Surv(AVAL,status) ~ TRTP, data = info)$pvalue,4),nsmall = 4)))
       
     }
     p_v_i <- c("")
@@ -2054,7 +1986,7 @@ server <- function(input,output){
           mrlci <- append(mrlci,med_surv$lower[1])
           mruci <- append(mruci,med_surv$upper[1])
           fit = coxph(Surv(AVAL,status) ~  trt,data = info[info[[i]] == k,],ties = input$tie)
-          ci <- coxf(fit,input$liki,info[info[[i]] == k,])
+          ci <- coxf(fit,input$tie,input$liki,info[info[[i]] == k,],var[var$level == k & var$subgroup == i,]$level_edit,F)
           print(1)
           hr <- append(hr,ci$coef)
           ciu <- append(ciu,ci$upper)
@@ -2062,7 +1994,7 @@ server <- function(input,output){
           # hr <- append(hr,round(exp(coef((coxph(Surv(AVAL,status)~TRTP,data = info[info[[i]] == k,],ties = input$tie)))),6))
           # ciu <- append(ciu,round(exp(confint((coxph(Surv(AVAL,status) ~ TRTP,data = info[info[[i]] == k,],ties = input$tie)))[,2]),3))
           # cil <- append(cil,round(exp(confint((coxph(Surv(AVAL,status) ~ TRTP,data = info[info[[i]] == k,],ties = input$tie)))[,1]),3))
-          p_v <- append(p_v,ifelse(survdiff(Surv(AVAL,status) ~ TRTP, data = info[info[[i]] == k,])$pvalue < 0.0001,"<0.0001",format(round(survdiff(Surv(AVAL,status) ~ TRTP, data = info[info[[i]] == k,])$pvalue,4),nsmall = 4)))
+          p_v <- append(p_v,ifelse(survdiff(Surv(AVAL,status) ~ TRTP, data = info[info[[i]] == k,])$pvalue < 0.00001,"<0.00001",format(round(survdiff(Surv(AVAL,status) ~ TRTP, data = info[info[[i]] == k,])$pvalue,4),nsmall = 4)))
           p_v_i <- append(p_v_i,"")
           a1 <- append(a1,paste(var[var$subgroup == i,]$subgroup_edit[1],"_",var[var$level == k & var$subgroup == i,]$level_edit))
           a2 <- append(a2,"level")
@@ -2098,6 +2030,7 @@ server <- function(input,output){
         }else{
           info1 <- info
         }
+        print(summary(coxph(Surv(AVAL,status) ~ TRTP + info1[[i]] + TRTP*info1[[i]],data = info1,ties = input$tie))$coefficients)
         p_v_i <- append(p_v_i,ifelse(summary(coxph(Surv(AVAL,status) ~ TRTP + info1[[i]] + TRTP*info1[[i]],data = info1,ties = input$tie))$coefficients[3,5] < 0.0001,"<0.0001",format(round(summary(coxph(Surv(AVAL,status) ~ TRTP + info1[[i]] + TRTP*info1[[i]],data = info1,ties = input$tie))$coefficients[3,5],4),nsmall = 4)))
         a1 <- append(a1,lab[[idx]])
         a2 <- append(a2,"subgroup")
@@ -2118,7 +2051,7 @@ server <- function(input,output){
           mrlci <- append(mrlci,med_surv$lower[1])
           mruci <- append(mruci,med_surv$upper[1])
           fit = coxph(Surv(AVAL,status) ~  trt,data = info[info[[i]] == k,],ties = input$tie)
-          ci <- coxf(fit,input$liki,info[info[[i]] == k,])
+          ci <- coxf(fit,input$tie,input$liki,info[info[[i]] == k,],k,F)
           print(2)
           hr <- append(hr,ci$coef)
           ciu <- append(ciu,ci$upper)
@@ -2126,7 +2059,7 @@ server <- function(input,output){
           # hr <- append(hr,round(exp(coef(coxph(Surv(AVAL,status)~TRTP,data = info[info[[i]] == k,],ties = input$tie))),6))
           # ciu <- append(ciu,round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP,data = info[info[[i]] == k,],ties = input$tie))[,2]),3))
           # cil <- append(cil,round(exp(confint(coxph(Surv(AVAL,status) ~ TRTP,data = info[info[[i]] == k,],ties = input$tie))[,1]),3))
-          p_v <- append(p_v,ifelse(survdiff(Surv(AVAL,status) ~ TRTP, data = info[info[[i]] == k,])$pvalue < 0.0001,"<0.0001",format(round(survdiff(Surv(AVAL,status) ~ TRTP, data = info[info[[i]] == k,])$pvalue,4),nsmall = 4)))
+          p_v <- append(p_v,ifelse(survdiff(Surv(AVAL,status) ~ TRTP, data = info[info[[i]] == k,])$pvalue < 0.00001,"<0.00001",format(round(survdiff(Surv(AVAL,status) ~ TRTP, data = info[info[[i]] == k,])$pvalue,4),nsmall = 4)))
           p_v_i <- append(p_v_i,"")
           a1 <- append(a1,lab[[idx]])
           a2 <- append(a2,"level")
@@ -2143,6 +2076,7 @@ server <- function(input,output){
                        "P Value" = p_v, "P Interaction" = p_v_i,sub1 = a1)
     data$"Hazard Ratio (95% CI)" = ifelse(is.na(data$HR),"",sprintf("%.2f (%.3f, %.3f)",
                                                                     data$HR,data$lower,data$upper)) ##nchar()=19
+    data$"Hazard Ratio (95% CI)" = gsub("NA","NE",data$"Hazard Ratio (95% CI)")
     data$"TreatmentGroup Median" = ifelse(is.na(data$HR),"",sprintf("%.1f (%.1f, %.1f)",
                                                                     data$mtg,data$mtlci,data$mtuci))
     data$"TreatmentGroup Median" = gsub("NA","NE",data$"TreatmentGroup Median")
@@ -2343,6 +2277,7 @@ server <- function(input,output){
     df[,17] <- ifelse(is.na(df[,17]),"",sprintf("%.4f", df[,17]))
     df$"HR (95% CI)" = ifelse(is.na(df$HR),"",sprintf("%.2f (%.3f, %.3f)",
                                                       df$HR,df$lower,df$upper))
+    df$"HR (95% CI)" = gsub("NA","NE",df$"HR (95% CI)")
     df$"TreatmentGroup Median" = ifelse(is.na(df$HR),"",sprintf("%.1f (%.1f, %.1f)",
                                                                 df$"Treatment Median",df$"Treatment Lower",df$"Treatment Upper"))
     df$"TreatmentGroup Median" = gsub("NA","NE",df$"TreatmentGroup Median")
@@ -2358,6 +2293,7 @@ server <- function(input,output){
                     "Treatment Upper","Reference Lower","Reference Upper","HR","lower","upper",
                     "P Value","P Interaction","Type","Parameter","Hazard Ratio(95% CI)",input$lal,input$ral,
                     paste(input$lal,"E/N"),paste(input$ral,"E/N")," ")
+    
     df
     
   })
@@ -2423,7 +2359,7 @@ server <- function(input,output){
                        ci_Theight = 0.2,
                        ci_lwd = 1.5,
                        refline_lwd = 1.5,
-                       refline_lty = 3,
+                       refline_lty = "42",
                        arrow_lwd = 1.5,
                        xaxis_lwd = 1.5,
                        core=list(fg_params = list(vjust = 0.5),
@@ -2470,6 +2406,10 @@ server <- function(input,output){
           nrcol = which(val == paste(input$ral,"E/N"))
           
         }
+        df <- rbind(df,c(rep(" ",13),rep(as.numeric(NA),3),rep(" ",9)))
+        df$HR <- as.numeric(df$HR)
+        df$lower <- as.numeric(df$lower)
+        df$upper <- as.numeric(df$upper)
         g <- forest(df[,col],
                     est = df$HR,
                     lower = df$lower,
@@ -2483,31 +2423,28 @@ server <- function(input,output){
                     ticks_at = ticks,
                     theme = tm
         )
-        g <- edit_plot(g,col = c(2:length(col)),which = "text",hjust=unit(0.5,"npc"),x=unit(0.5,"npc"))
+        g <- edit_plot(g,col = c(2:length(col)),part = c("body", "header"),which = "text",hjust=unit(0.5,"npc"),x=unit(0.5,"npc"))
         
         
         if(input$med == T){
           req(length(mtcol) != 0)
           req(length(mrcol) != 0)
-          g <- insert_text(g,text = "Median (95% CI) (Months)",col = mtcol:mrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
+          g <- insert_text(g,text = "Median (95% CI) (Months)",col = mtcol:mrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif",fill = "white"))
         }
         
         if(input$pool == F){
           req(length(ntcol) != 0)
           req(length(nrcol) != 0)
           if(input$med == T){
-            g <- add_text(g,text = "Number of events/N",row = 1,col = ntcol:nrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
+            g <- add_text(g,text = "Number of events/N",row = 1,col = ntcol:nrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif",fill = "white"))
           }else{
-            g <- insert_text(g,text = "Number of events/N",col = ntcol:nrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
+            g <- insert_text(g,text = "Number of events/N",col = ntcol:nrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif",fill = "white"))
           }
         }
         
-        g <- insert_text(g,
-                         text = "",
-                         row = nrow(df)+1,
-                         part = "body",
-                         gp = gpar(fontsize = 2))
-        
+        g <- edit_plot(g, row = nrow(df), which = "background",
+                       gp = gpar(fill = "white"))
+        g$heights[nrow(df)+3] <- unit(1.5,"mm")
         g
       }
       else{
@@ -2571,6 +2508,13 @@ server <- function(input,output){
         nrcol = which(val == paste(input$ral,"E/N"))
         
       }
+      #Add a blank row
+      #   print(head(df))
+      df <- rbind(df,c(rep(" ",2),rep(as.numeric(NA),13),rep(" ",9)))
+      df$HR <- as.numeric(df$HR)
+      df$lower <- as.numeric(df$lower)
+      df$upper <- as.numeric(df$upper)
+      df[nrow(df),]$Parameter <- df[nrow(df)-1,]$Parameter
       g <- forest(df[,col],
                   est = df$HR,
                   lower = df$lower,
@@ -2582,26 +2526,27 @@ server <- function(input,output){
                   x_trans = input$scale,
                   ticks_at = ticks,
                   theme = tm)
-      g <- edit_plot(g,col = c(2:length(col)),which = "text",hjust=unit(0.5,"npc"),x=unit(0.5,"npc"))
+      g <- edit_plot(g,col = c(2:length(col)),part = c("body", "header"),which = "text",hjust=unit(0.5,"npc"),x=unit(0.5,"npc"))
       
       
       
       if(input$med == T){
         req(length(mtcol) != 0)
         req(length(mrcol) != 0)
-        g <- insert_text(g,text = "Median (95% CI) (Months)",col = mtcol:mrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
+        g <- insert_text(g,text = "Median (95% CI) (Months)",col = mtcol:mrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif",fill = "white"))
       }
       
       if(input$pool == F){
         req(length(ntcol) != 0)
         req(length(nrcol) != 0)
         if(input$med == T){
-          g <- add_text(g,text = "Number of events/N",row = 1,col = ntcol:nrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
+          g <- add_text(g,text = "Number of events/N",row = 1,col = ntcol:nrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif",fill = "white"))
         }else{
-          g <- insert_text(g,text = "Number of events/N",col = ntcol:nrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
+          g <- insert_text(g,text = "Number of events/N",col = ntcol:nrcol,part = "header",just="center",gp=gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif",fill = "white"))
         }
       }
       if(length(unique(df$Parameter))>1){
+        print(df$Parameter)
         n = 1
         s = table(df$Parameter)
         for(i in unique(df$Parameter)){
@@ -2619,18 +2564,26 @@ server <- function(input,output){
                            gp = gpar(fontface = "bold",fontsize = input$frf,fontfamily = "serif"))
           n = n+s[i]+1
         }
-        g <- insert_text(g,
-                         text = "",
-                         row = nrow(df)+2*length(unique(df$Parameter))+1,
-                         part = "body",
-                         gp = gpar(fontsize = 2))
+        g <- edit_plot(g, row = nrow(df)+length(unique(df$Parameter)), which = "background",
+                       gp = gpar(fill = "white"))
+        g$heights[nrow(df)+length(unique(df$Parameter))+3] <- unit(1.5,"mm")
+        # g <- insert_text(g,
+        #                  text = "",
+        #                  row = nrow(df)+2*length(unique(df$Parameter))+1,
+        #                  part = "body",
+        #                  gp = gpar(fontsize = 2))
         
       }else{
-        g <- insert_text(g,
-                         text = "",
-                         row = nrow(df)+1,
-                         part = "body",
-                         gp = gpar(fontsize = 2))        
+        g <- edit_plot(g, row = nrow(df), which = "background",
+                       gp = gpar(fill = "white"))
+        # g <- insert_text(g,
+        #                  text = "",
+        #                  row = nrow(df)+1,
+        #                  part = "body",
+        #                  gp = gpar(fontsize = 2))
+        
+        g$heights[nrow(df)+3] <- unit(1.5,"mm")
+        g
       }
       
       g
@@ -2653,17 +2606,19 @@ server <- function(input,output){
     },
     content = function(file){
       if(input$frdltype == "pptx"){
-        doc = read_pptx()
-        doc <- add_slide(doc,"Blank", "Office Theme")
-        p <- frp()
-        p <- dml(ggobj = p)
+        
+        # doc = read_pptx()
+        # doc <- add_slide(doc,"Blank", "Office Theme")
+        # p <- frp()
+        # p <- dml(ggobj = p)
         wh <- get_wh(frp(),unit = "in")
-        doc <- ph_with(doc,value = p,location = ph_location(width = wh[1],height= wh[2]))
-        print(doc,target = file)
+        graph2ppt(x = frp(),file=file, width = wh[1],height = wh[2])
+        # doc <- ph_with(doc,value = p,location = ph_location(width = wh[1],height= wh[2]))
+        # print(doc,target = file)
       }else{
         p_sc <- get_scale(plot = frp(),width_wanted = 13,height_wanted = 8,unit = "in")
         wh <- get_wh(frp(),unit = "in")
-        ggsave(file,plot = frp(),device = input$frdltype,width = wh[1],height= wh[2],units = "in")
+        ggsave(file,plot = frp(),device = input$frdltype,width = wh[1],height= wh[2],units = "in",limitsize = F)
         
       }
       
